@@ -12,11 +12,10 @@ export default function DiagramPage() {
   return (
     <>
       <div className="panel">
-        <h2 style={{marginTop:0}}>Diagram</h2>
-        <div className="muted">This starter keeps diagram as a placeholder. Next step: React Flow.</div>
+        <h2 style={{ marginTop: 0 }}>Diagram</h2>
+        <div className="muted">Placeholder. Next step: React Flow integration.</div>
       </div>
       <div className="panel">
-        <h3 style={{marginTop:0}}>Diagram Layout Data</h3>
         {error ? <div className="error">{error}</div> : <pre>{JSON.stringify(layout, null, 2)}</pre>}
       </div>
     </>

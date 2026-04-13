@@ -1,4 +1,9 @@
-# OSS Frontend Render Starter
+# OSS Frontend Render v2
+
+Improved pages:
+- Services: left list, read-only details, edit/new/delete
+- Order Aims: left list, editor with sub-aims
+- Attributes: left list, editor with possible values and list support
 
 ## Local
 npm install
@@ -12,10 +17,5 @@ npm install && npm run build
 Publish Directory:
 dist
 
-Environment variable:
+Environment Variable:
 VITE_API_BASE=https://YOUR-BACKEND.onrender.com/api
-
-Important:
-Enable CORS on backend for:
-- your Render frontend URL
-- http://localhost:5173
