@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
 const emptyForm = { id:null, code:"", name:"", type:"CFS", description:"", mappings:[{ aimId:"", subAimId:"" }] };
@@ -20,48 +20,87 @@ export default function ServicesPage() {
         api.listOrderAims(),
         api.listServiceAimMappings()
       ]);
-      setServices(svc); setOrderAims(aims); setAllMappings(maps);
+      setServices(svc);
+      setOrderAims(aims);
+      setAllMappings(maps);
       if (!selectedId && svc.length) setSelectedId(svc[0].id);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
+
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
     const selected = services.find(x => x.id === selectedId);
     if (selected && !isEditing && !isNew) {
-      const mappings = allMappings.filter(m => m.service_id === selected.id).map(m => ({ mapId:m.id, aimId:m.order_aim_id, subAimId:m.order_sub_aim_id }));
+      const mappings = allMappings.filter(m => m.service_id === selected.id).map(m => ({
+        mapId: m.id,
+        aimId: m.order_aim_id,
+        subAimId: m.order_sub_aim_id
+      }));
       setForm({
-        id:selected.id, code:selected.code, name:selected.name, type:selected.type, description:selected.description || "",
+        id: selected.id,
+        code: selected.code,
+        name: selected.name,
+        type: selected.type,
+        description: selected.description || "",
         mappings: mappings.length ? mappings : [{ aimId:"", subAimId:"" }]
       });
     }
   }, [services, allMappings, selectedId, isEditing, isNew]);
 
   function newItem() {
-    setSelectedId(null); setForm(emptyForm); setIsEditing(true); setIsNew(true); setError("");
+    setSelectedId(null);
+    setForm(emptyForm);
+    setIsEditing(true);
+    setIsNew(true);
+    setError("");
   }
+
   function selectItem(item) {
-    setSelectedId(item.id); setIsEditing(false); setIsNew(false); setError("");
+    setSelectedId(item.id);
+    setIsEditing(false);
+    setIsNew(false);
+    setError("");
   }
+
   function cancelEdit() {
-    setIsEditing(false); setIsNew(false);
+    setIsEditing(false);
+    setIsNew(false);
     const selected = services.find(x => x.id === selectedId);
     if (selected) {
-      const mappings = allMappings.filter(m => m.service_id === selected.id).map(m => ({ mapId:m.id, aimId:m.order_aim_id, subAimId:m.order_sub_aim_id }));
-      setForm({ id:selected.id, code:selected.code, name:selected.name, type:selected.type, description:selected.description || "", mappings: mappings.length ? mappings : [{ aimId:"", subAimId:"" }] });
-    } else setForm(emptyForm);
+      const mappings = allMappings.filter(m => m.service_id === selected.id).map(m => ({
+        mapId: m.id,
+        aimId: m.order_aim_id,
+        subAimId: m.order_sub_aim_id
+      }));
+      setForm({
+        id: selected.id,
+        code: selected.code,
+        name: selected.name,
+        type: selected.type,
+        description: selected.description || "",
+        mappings: mappings.length ? mappings : [{ aimId:"", subAimId:"" }]
+      });
+    } else {
+      setForm(emptyForm);
+    }
   }
+
   function updateMapping(index, patch) {
     const next = [...form.mappings];
     next[index] = { ...next[index], ...patch };
     if (patch.aimId !== undefined) next[index].subAimId = "";
     setForm({ ...form, mappings: next });
   }
+
   function addMappingRow() {
     setForm({ ...form, mappings: [...form.mappings, { aimId:"", subAimId:"" }] });
   }
+
   function removeMappingRow(index) {
-    const next = form.mappings.filter((_,i) => i !== index);
+    const next = form.mappings.filter((_, i) => i !== index);
     setForm({ ...form, mappings: next.length ? next : [{ aimId:"", subAimId:"" }] });
   }
 
@@ -71,12 +110,23 @@ export default function ServicesPage() {
     try {
       let serviceId = form.id;
       if (isNew) {
-        const created = await api.createService({ code: form.code, name: form.name, type: form.type, description: form.description });
+        const created = await api.createService({
+          code: form.code,
+          name: form.name,
+          type: form.type,
+          description: form.description
+        });
         serviceId = created.id;
       } else {
-        await api.updateService(serviceId, { name: form.name, type: form.type, description: form.description });
+        await api.updateService(serviceId, {
+          name: form.name,
+          type: form.type,
+          description: form.description
+        });
         const existing = allMappings.filter(m => m.service_id === serviceId);
-        for (const m of existing) await api.deleteServiceAimMapping(m.id);
+        for (const m of existing) {
+          await api.deleteServiceAimMapping(m.id);
+        }
       }
 
       const desired = form.mappings.filter(m => m.aimId && m.subAimId);
@@ -92,7 +142,9 @@ export default function ServicesPage() {
       setSelectedId(serviceId);
       setIsEditing(false);
       setIsNew(false);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
 
   async function remove() {
@@ -101,8 +153,12 @@ export default function ServicesPage() {
     try {
       await api.deleteService(form.id);
       await load();
-      setForm(emptyForm); setIsEditing(false); setIsNew(false);
-    } catch (err) { setError(err.message); }
+      setForm(emptyForm);
+      setIsEditing(false);
+      setIsNew(false);
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
 
   function subAimsFor(aimId) {
@@ -126,7 +182,8 @@ export default function ServicesPage() {
           <h3 style={{marginTop:0}}>Current Services</h3>
           {services.map(item => (
             <button key={item.id} className={`list-button${item.id === selectedId ? " active" : ""}`} onClick={() => selectItem(item)}>
-              <strong>{item.name}</strong><br /><span className="muted">{item.code} · {item.type}</span>
+              <strong>{item.name}</strong><br />
+              <span className="muted">{item.code} · {item.type}</span>
             </button>
           ))}
           {!services.length && <div className="muted">No services yet.</div>}
@@ -161,7 +218,7 @@ export default function ServicesPage() {
                   </select>
                   <select value={m.subAimId} onChange={e => updateMapping(idx, { subAimId:e.target.value })}>
                     <option value="">Select sub-aim</option>
-                    {subAimsFor(m.aimId).map(sa => <option key={sa.code} value={sa.id || sa.code}>{sa.name || sa.code}</option>)}
+                    {subAimsFor(m.aimId).map(sa => <option key={sa.id} value={sa.id}>{sa.name || sa.code}</option>)}
                   </select>
                   <button type="button" className="btn danger small" onClick={() => removeMappingRow(idx)}>Remove</button>
                 </div>
@@ -171,12 +228,6 @@ export default function ServicesPage() {
 
             {isEditing && <button className="btn" type="submit">Save</button>}
           </form>
-
-          {!isEditing && form.mappings.filter(m => m.aimId && m.subAimId).length > 0 && (
-            <div style={{marginTop:12}}>
-              {form.mappings.filter(m => m.aimId && m.subAimId).map((m, idx) => <span className="pill" key={idx}>{m.aimId} / {m.subAimId}</span>)}
-            </div>
-          )}
 
           {error && <div className="error">{error}</div>}
         </div>

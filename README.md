@@ -1,16 +1,7 @@
-# OSS Frontend Render v3
+# OSS Frontend Render v3.1
 
-Included:
-- fixed duplicate Edit button
-- Services with aim/sub-aim mappings
-- Attributes delete with involvement check via backend error
-- Attribute Involvement editor with allowed values subset and defaults
-- Decomposition page
-- Attribute Propagation page
-- regrouped left menu
-
-Build Command:
-npm install && npm run build
-
-Publish Directory:
-dist
+Patch v3.1 includes:
+- service save uses real `sub-aim id`
+- readable error messages instead of `[object Object]`
+- Manage Involvements list shows service/attribute names
+- if attribute has no configured possible values, default value becomes free text
