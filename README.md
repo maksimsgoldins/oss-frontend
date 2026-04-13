@@ -1,21 +1,16 @@
-# OSS Frontend Render v2
+# OSS Frontend Render v3
 
-Improved pages:
-- Services: left list, read-only details, edit/new/delete
-- Order Aims: left list, editor with sub-aims
-- Attributes: left list, editor with possible values and list support
+Included:
+- fixed duplicate Edit button
+- Services with aim/sub-aim mappings
+- Attributes delete with involvement check via backend error
+- Attribute Involvement editor with allowed values subset and defaults
+- Decomposition page
+- Attribute Propagation page
+- regrouped left menu
 
-## Local
-npm install
-copy .env.example .env
-npm run dev
-
-## Render Static Site
 Build Command:
 npm install && npm run build
 
 Publish Directory:
 dist
-
-Environment Variable:
-VITE_API_BASE=https://YOUR-BACKEND.onrender.com/api

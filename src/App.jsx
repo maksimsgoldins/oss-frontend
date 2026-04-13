@@ -5,8 +5,9 @@ import DashboardPage from "./pages/DashboardPage";
 import ServicesPage from "./pages/ServicesPage";
 import OrderAimsPage from "./pages/OrderAimsPage";
 import AttributesPage from "./pages/AttributesPage";
-import AttributeInvolvementPage from "./pages/AttributeInvolvementPage";
-import RelationsPage from "./pages/RelationsPage";
+import InvolvementsPage from "./pages/InvolvementsPage";
+import DecompositionPage from "./pages/DecompositionPage";
+import AttributePropagationPage from "./pages/AttributePropagationPage";
 import DiagramPage from "./pages/DiagramPage";
 
 export default function App() {
@@ -17,8 +18,9 @@ export default function App() {
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/order-aims" element={<OrderAimsPage />} />
         <Route path="/attributes" element={<AttributesPage />} />
-        <Route path="/attribute-involvement" element={<AttributeInvolvementPage />} />
-        <Route path="/relations" element={<RelationsPage />} />
+        <Route path="/involvements" element={<InvolvementsPage />} />
+        <Route path="/decomposition" element={<DecompositionPage />} />
+        <Route path="/attribute-propagation" element={<AttributePropagationPage />} />
         <Route path="/diagram" element={<DiagramPage />} />
       </Routes>
     </Layout>

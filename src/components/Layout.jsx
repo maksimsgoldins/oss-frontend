@@ -2,34 +2,39 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 
 export default function Layout({ children }) {
-  const links = [
-    ["/", "Dashboard"],
-    ["/services", "Services"],
-    ["/order-aims", "Order Aims"],
-    ["/attributes", "Attributes"],
-    ["/attribute-involvement", "Attribute Involvement"],
-    ["/relations", "Relations"],
-    ["/diagram", "Diagram"]
+  const groups = [
+    { title: "Services", items: [
+      ["/services", "Manage Service"],
+      ["/decomposition", "Manage Decomposition"],
+    ]},
+    { title: "Attributes", items: [
+      ["/attributes", "Manage Attributes"],
+      ["/involvements", "Manage Involvements"],
+      ["/attribute-propagation", "Attribute Propagation"],
+    ]},
+    { title: "General", items: [
+      ["/order-aims", "Order Aims"],
+      ["/", "Dashboard"],
+      ["/diagram", "Diagram"],
+    ]}
   ];
 
   return (
     <div className="app">
       <aside className="sidebar">
         <h2 style={{ marginTop: 0 }}>OSS Catalog</h2>
-        <div className="muted" style={{ color: "#cbd5e1", marginBottom: 16 }}>Web app v2</div>
-
-        {links.map(([to, label]) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) => `menu-link${isActive ? " active" : ""}`}
-          >
-            {label}
-          </NavLink>
+        <div className="muted" style={{ color: "#cbd5e1", marginBottom: 16 }}>Web app v3</div>
+        {groups.map(group => (
+          <div key={group.title}>
+            <div className="group-title">{group.title}</div>
+            {group.items.map(([to,label]) => (
+              <NavLink key={to} to={to} end={to === "/"} className={({isActive}) => `menu-link${isActive ? " active" : ""}`}>
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </aside>
-
       <main className="content">{children}</main>
     </div>
   );
