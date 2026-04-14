@@ -7,7 +7,10 @@ async function request(path, options = {}) {
   });
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
-    try { const data = await res.json(); detail = data.detail || JSON.stringify(data); } catch {}
+    try {
+      const data = await res.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch {}
     throw new Error(detail);
   }
   if (res.status === 204) return null;
@@ -46,7 +49,8 @@ export const api = {
   listAttributePropagation: (relationId="") => request(`/attribute-propagation${relationId ? `?relation_id=${relationId}` : ""}`),
   createAttributePropagation: payload => request("/attribute-propagation", { method:"POST", body: JSON.stringify(payload) }),
 
-  listDiagramLayout: () => request("/diagram-layout")
+  listDiagramLayout: () => request("/diagram-layout"),
+  replaceDiagramLayout: payload => request("/diagram-layout", { method:"PUT", body: JSON.stringify(payload) })
 };
 
 export { API_BASE };
