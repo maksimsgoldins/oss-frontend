@@ -20,13 +20,15 @@ function DiagramInner() {
   const [attributes, setAttributes] = useState([]);
 
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-  const [selectedAimIds, setSelectedAimIds] = useState([]);
-  const [selectedSubAimIds, setSelectedSubAimIds] = useState([]);
+
+  const [focusParentServiceId, setFocusParentServiceId] = useState("");
+  const [focusAimId, setFocusAimId] = useState("");
+  const [focusSubAimId, setFocusSubAimId] = useState("");
 
   const [selectedEdgeId, setSelectedEdgeId] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState("");
 
-  const [viewMode, setViewMode] = useState("FULL"); // FULL | SUBTREE_ONLY | EXPAND_FROM_NODE
+  const [viewMode, setViewMode] = useState("FULL");
 
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -111,46 +113,57 @@ function DiagramInner() {
     return "#f3f4f6";
   }
 
-  function serviceTypeBadgeColor(serviceType) {
-    if (serviceType === "CFS") return "#2563eb";
-    if (serviceType === "RFS") return "#16a34a";
-    if (serviceType === "Resource") return "#ea580c";
-    return "#64748b";
+  function serviceTypeBorderColor(serviceType) {
+    if (serviceType === "CFS") return "#93c5fd";
+    if (serviceType === "RFS") return "#86efac";
+    if (serviceType === "Resource") return "#fdba74";
+    return "#94a3b8";
   }
 
-  const availableSubAims = useMemo(() => {
-    if (!selectedAimIds.length) return [];
-    return orderAims
-      .filter(a => selectedAimIds.includes(a.id))
-      .flatMap(a => (a.sub_aims || []).map(sa => ({ ...sa, order_aim_id: a.id })));
-  }, [orderAims, selectedAimIds]);
-
-  const baseFilteredRelations = useMemo(() => {
-    return relations.filter(r => {
-      const serviceMatch =
-        !selectedServiceIds.length ||
+  const serviceFilteredRelations = useMemo(() => {
+    if (!selectedServiceIds.length) return relations;
+    return relations.filter(
+      r =>
         selectedServiceIds.includes(r.parent_service_id) ||
-        selectedServiceIds.includes(r.child_service_id);
+        selectedServiceIds.includes(r.child_service_id)
+    );
+  }, [relations, selectedServiceIds]);
 
-      const aimMatch =
-        !selectedAimIds.length ||
-        selectedAimIds.includes(r.parent_order_aim_id) ||
-        selectedAimIds.includes(r.child_order_aim_id);
+  const availableFocusAims = useMemo(() => {
+    if (!focusParentServiceId) return [];
+    const ids = [...new Set(
+      serviceFilteredRelations
+        .filter(r => r.parent_service_id === focusParentServiceId)
+        .map(r => r.parent_order_aim_id)
+    )];
+    return ids.map(id => aimMap[id]).filter(Boolean);
+  }, [focusParentServiceId, serviceFilteredRelations, aimMap]);
 
-      const subAimMatch =
-        !selectedSubAimIds.length ||
-        selectedSubAimIds.includes(r.parent_order_sub_aim_id) ||
-        selectedSubAimIds.includes(r.child_order_sub_aim_id);
+  const availableFocusSubAims = useMemo(() => {
+    if (!focusParentServiceId || !focusAimId) return [];
+    const ids = [...new Set(
+      serviceFilteredRelations
+        .filter(
+          r =>
+            r.parent_service_id === focusParentServiceId &&
+            r.parent_order_aim_id === focusAimId
+        )
+        .map(r => r.parent_order_sub_aim_id)
+    )];
+    const aim = aimMap[focusAimId];
+    return (aim?.sub_aims || []).filter(sa => ids.includes(sa.id));
+  }, [focusParentServiceId, focusAimId, serviceFilteredRelations, aimMap]);
 
-      return serviceMatch && aimMatch && subAimMatch;
-    });
-  }, [relations, selectedServiceIds, selectedAimIds, selectedSubAimIds]);
+  const focusRootNodeId = useMemo(() => {
+    if (!focusParentServiceId || !focusAimId || !focusSubAimId) return "";
+    return nodeKey(focusParentServiceId, focusAimId, focusSubAimId);
+  }, [focusParentServiceId, focusAimId, focusSubAimId]);
 
-  const relationGraph = useMemo(() => {
+  const relationIndex = useMemo(() => {
     const children = new Map();
     const parents = new Map();
 
-    baseFilteredRelations.forEach(rel => {
+    serviceFilteredRelations.forEach(rel => {
       const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
       const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
 
@@ -162,40 +175,24 @@ function DiagramInner() {
     });
 
     return { children, parents };
-  }, [baseFilteredRelations]);
+  }, [serviceFilteredRelations]);
 
-  const subtreeNodeKeys = useMemo(() => {
-    if (!selectedNodeId || viewMode === "FULL") return null;
+  const activeRootNodeId = selectedNodeId || focusRootNodeId;
 
-    const visited = new Set();
-    const queue = [selectedNodeId];
-    visited.add(selectedNodeId);
+  const activeNodeSet = useMemo(() => {
+    if (!activeRootNodeId || viewMode === "FULL") return null;
 
-    while (queue.length) {
-      const current = queue.shift();
-      const nextChildren = relationGraph.children.get(current) || [];
-      nextChildren.forEach(item => {
-        if (!visited.has(item.nodeKey)) {
-          visited.add(item.nodeKey);
-          queue.push(item.nodeKey);
-        }
-      });
+    if (viewMode === "FOCUS_ONLY") {
+      return new Set([activeRootNodeId]);
     }
 
-    return visited;
-  }, [selectedNodeId, viewMode, relationGraph]);
-
-  const expandedNodeKeys = useMemo(() => {
-    if (!selectedNodeId || viewMode !== "EXPAND_FROM_NODE") return null;
-
-    const visited = new Set();
-    const queue = [selectedNodeId];
-    visited.add(selectedNodeId);
+    const visited = new Set([activeRootNodeId]);
+    const queue = [activeRootNodeId];
 
     while (queue.length) {
       const current = queue.shift();
 
-      const nextChildren = relationGraph.children.get(current) || [];
+      const nextChildren = relationIndex.children.get(current) || [];
       nextChildren.forEach(item => {
         if (!visited.has(item.nodeKey)) {
           visited.add(item.nodeKey);
@@ -203,33 +200,42 @@ function DiagramInner() {
         }
       });
 
-      const nextParents = relationGraph.parents.get(current) || [];
-      nextParents.forEach(item => {
-        if (!visited.has(item.nodeKey)) {
-          visited.add(item.nodeKey);
-          queue.push(item.nodeKey);
-        }
-      });
+      if (viewMode === "EXPAND_FROM_NODE") {
+        const nextParents = relationIndex.parents.get(current) || [];
+        nextParents.forEach(item => {
+          if (!visited.has(item.nodeKey)) {
+            visited.add(item.nodeKey);
+            queue.push(item.nodeKey);
+          }
+        });
+      }
     }
 
     return visited;
-  }, [selectedNodeId, viewMode, relationGraph]);
-
-  const activeNodeKeys = useMemo(() => {
-    if (viewMode === "SUBTREE_ONLY") return subtreeNodeKeys;
-    if (viewMode === "EXPAND_FROM_NODE") return expandedNodeKeys;
-    return null;
-  }, [viewMode, subtreeNodeKeys, expandedNodeKeys]);
+  }, [activeRootNodeId, viewMode, relationIndex]);
 
   const filteredRelations = useMemo(() => {
-    if (!activeNodeKeys) return baseFilteredRelations;
+    if (viewMode === "FULL") return serviceFilteredRelations;
 
-    return baseFilteredRelations.filter(rel => {
+    if (viewMode === "FOCUS_ONLY") {
+      if (!activeRootNodeId) return serviceFilteredRelations;
+      const root = parseNodeKey(activeRootNodeId);
+      return serviceFilteredRelations.filter(
+        r =>
+          r.parent_service_id === root.serviceId &&
+          r.parent_order_aim_id === root.aimId &&
+          r.parent_order_sub_aim_id === root.subAimId
+      );
+    }
+
+    if (!activeNodeSet) return serviceFilteredRelations;
+
+    return serviceFilteredRelations.filter(rel => {
       const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
       const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
-      return activeNodeKeys.has(parentKey) && activeNodeKeys.has(childKey);
+      return activeNodeSet.has(parentKey) && activeNodeSet.has(childKey);
     });
-  }, [baseFilteredRelations, activeNodeKeys]);
+  }, [serviceFilteredRelations, viewMode, activeRootNodeId, activeNodeSet]);
 
   const graphData = useMemo(() => {
     const nodeMap = new Map();
@@ -241,46 +247,42 @@ function DiagramInner() {
 
       if (!nodeMap.has(parentKey)) {
         const svc = serviceMap[rel.parent_service_id];
-        const serviceType = svc?.type || "";
-        const isSelected = selectedNodeId === parentKey;
         nodeMap.set(parentKey, {
           id: parentKey,
           data: {
             label: `${svc?.name || rel.parent_service_id}\n${aimLabel(rel.parent_order_aim_id)} / ${subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)}`,
-            serviceType
+            serviceType: svc?.type || ""
           },
           position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 },
           style: {
-            border: isSelected ? "3px solid #2563eb" : "1px solid #94a3b8",
+            border: `1px solid ${serviceTypeBorderColor(svc?.type || "")}`,
             borderRadius: 14,
             padding: 10,
-            background: serviceTypeColor(serviceType),
+            background: serviceTypeColor(svc?.type || ""),
             width: 250,
             whiteSpace: "pre-line",
-            boxShadow: isSelected ? "0 0 0 3px rgba(37,99,235,0.15)" : "0 1px 3px rgba(0,0,0,0.08)"
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
           }
         });
       }
 
       if (!nodeMap.has(childKey)) {
         const svc = serviceMap[rel.child_service_id];
-        const serviceType = svc?.type || "";
-        const isSelected = selectedNodeId === childKey;
         nodeMap.set(childKey, {
           id: childKey,
           data: {
             label: `${svc?.name || rel.child_service_id}\n${aimLabel(rel.child_order_aim_id)} / ${subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)}`,
-            serviceType
+            serviceType: svc?.type || ""
           },
           position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 },
           style: {
-            border: isSelected ? "3px solid #2563eb" : "1px solid #94a3b8",
+            border: `1px solid ${serviceTypeBorderColor(svc?.type || "")}`,
             borderRadius: 14,
             padding: 10,
-            background: serviceTypeColor(serviceType),
+            background: serviceTypeColor(svc?.type || ""),
             width: 250,
             whiteSpace: "pre-line",
-            boxShadow: isSelected ? "0 0 0 3px rgba(37,99,235,0.15)" : "0 1px 3px rgba(0,0,0,0.08)"
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
           }
         });
       }
@@ -291,8 +293,8 @@ function DiagramInner() {
         target: childKey,
         label: rel.instantiation_mode,
         type: "smoothstep",
-        animated: selectedEdgeId === rel.id,
-        style: selectedEdgeId === rel.id ? { strokeWidth: 3, stroke: "#2563eb" } : { stroke: "#64748b" },
+        animated: false,
+        style: { stroke: "#64748b", strokeWidth: 1.5 },
         data: { relationId: rel.id }
       });
     });
@@ -315,12 +317,45 @@ function DiagramInner() {
     });
 
     return { nextNodes, nextEdges };
-  }, [filteredRelations, serviceMap, aimMap, layoutRows, selectedEdgeId, selectedNodeId]);
+  }, [filteredRelations, serviceMap, aimMap, layoutRows]);
 
   useEffect(() => {
     setNodes(graphData.nextNodes);
     setEdges(graphData.nextEdges);
   }, [graphData, setNodes, setEdges]);
+
+  useEffect(() => {
+    setNodes(prev =>
+      prev.map(node => {
+        const isSelected = node.id === selectedNodeId;
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            border: isSelected
+              ? "3px solid #2563eb"
+              : node.style.border,
+            boxShadow: isSelected
+              ? "0 0 0 3px rgba(37,99,235,0.15)"
+              : "0 1px 3px rgba(0,0,0,0.08)"
+          }
+        };
+      })
+    );
+  }, [selectedNodeId, setNodes]);
+
+  useEffect(() => {
+    setEdges(prev =>
+      prev.map(edge => ({
+        ...edge,
+        animated: edge.id === selectedEdgeId,
+        style:
+          edge.id === selectedEdgeId
+            ? { ...(edge.style || {}), strokeWidth: 3, stroke: "#2563eb" }
+            : { ...(edge.style || {}), strokeWidth: 1.5, stroke: "#64748b" }
+      }))
+    );
+  }, [selectedEdgeId, setEdges]);
 
   const onMultiSelectChange = useCallback((setter) => (event) => {
     const values = Array.from(event.target.selectedOptions).map(o => o.value);
@@ -356,8 +391,9 @@ function DiagramInner() {
 
   function clearFilters() {
     setSelectedServiceIds([]);
-    setSelectedAimIds([]);
-    setSelectedSubAimIds([]);
+    setFocusParentServiceId("");
+    setFocusAimId("");
+    setFocusSubAimId("");
   }
 
   function clearSelection() {
@@ -372,9 +408,7 @@ function DiagramInner() {
         <div className="header-line">
           <div>
             <h2 style={{ marginTop: 0, marginBottom: 4 }}>Diagram</h2>
-            <div className="muted">
-              Node = Service + Aim + Sub-aim. Edge = Decomposition relation.
-            </div>
+            <div className="muted">Node = Service + Aim + Sub-aim. Edge = Decomposition relation.</div>
           </div>
           <div className="row">
             <button className="btn secondary" onClick={clearFilters}>Clear filters</button>
@@ -391,8 +425,8 @@ function DiagramInner() {
 
         <div className="split">
           <div className="field">
-            <label>Filter by service</label>
-            <select multiple value={selectedServiceIds} onChange={onMultiSelectChange(setSelectedServiceIds)} style={{ minHeight: 120 }}>
+            <label>Filter by services (optional)</label>
+            <select multiple value={selectedServiceIds} onChange={onMultiSelectChange(setSelectedServiceIds)} style={{ minHeight: 110 }}>
               {services.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.type})
@@ -402,11 +436,56 @@ function DiagramInner() {
           </div>
 
           <div className="field">
-            <label>Filter by aim</label>
-            <select multiple value={selectedAimIds} onChange={onMultiSelectChange(setSelectedAimIds)} style={{ minHeight: 120 }}>
-              {orderAims.map(a => (
+            <label>Focus parent service</label>
+            <select
+              value={focusParentServiceId}
+              onChange={e => {
+                setFocusParentServiceId(e.target.value);
+                setFocusAimId("");
+                setFocusSubAimId("");
+              }}
+            >
+              <option value="">None</option>
+              {services.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.type})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="split">
+          <div className="field">
+            <label>Focus aim</label>
+            <select
+              value={focusAimId}
+              onChange={e => {
+                setFocusAimId(e.target.value);
+                setFocusSubAimId("");
+              }}
+              disabled={!focusParentServiceId}
+            >
+              <option value="">None</option>
+              {availableFocusAims.map(a => (
                 <option key={a.id} value={a.id}>
                   {a.name || a.code}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label>Focus sub-aim</label>
+            <select
+              value={focusSubAimId}
+              onChange={e => setFocusSubAimId(e.target.value)}
+              disabled={!focusAimId}
+            >
+              <option value="">None</option>
+              {availableFocusSubAims.map(sa => (
+                <option key={sa.id} value={sa.id}>
+                  {sa.name || sa.code}
                 </option>
               ))}
             </select>
@@ -414,25 +493,17 @@ function DiagramInner() {
         </div>
 
         <div className="field">
-          <label>Filter by sub-aim</label>
-          <select multiple value={selectedSubAimIds} onChange={onMultiSelectChange(setSelectedSubAimIds)} style={{ minHeight: 120 }}>
-            {availableSubAims.map(sa => (
-              <option key={sa.id} value={sa.id}>
-                {(sa.name || sa.code)} ({aimLabel(sa.order_aim_id)})
-              </option>
-            ))}
-          </select>
-          <div className="muted">If no aim is selected, sub-aim filter list stays empty.</div>
-        </div>
-
-        <div className="field">
           <label>View mode</label>
-          <select value={viewMode} onChange={e => setViewMode(e.target.value)} disabled={!selectedNodeId}>
+          <select value={viewMode} onChange={e => setViewMode(e.target.value)}>
             <option value="FULL">Full graph</option>
+            <option value="FOCUS_ONLY">Show only focus node outgoing relations</option>
             <option value="SUBTREE_ONLY">Show only selected subtree</option>
             <option value="EXPAND_FROM_NODE">Expand from selected node</option>
           </select>
-          <div className="muted">Select a node first to enable subtree modes.</div>
+          <div className="muted">
+            `FOCUS_ONLY` uses Focus Parent Service / Aim / Sub-aim.
+            `SUBTREE_ONLY` and `EXPAND_FROM_NODE` use clicked node first, and fall back to focus scenario if set.
+          </div>
         </div>
 
         {saved && <div className="muted" style={{ marginTop: 8 }}>{saved}</div>}
@@ -511,17 +582,6 @@ function DiagramInner() {
                 <div><strong>Service:</strong> {selectedNodeService.name} ({selectedNodeService.type})</div>
                 <div className="muted" style={{ marginTop: 6 }}>
                   {aimLabel(selectedNode.aimId)} / {subAimLabel(selectedNode.aimId, selectedNode.subAimId)}
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  <span
-                    className="pill"
-                    style={{
-                      background: serviceTypeColor(selectedNodeService.type),
-                      border: `1px solid ${serviceTypeBadgeColor(selectedNodeService.type)}`
-                    }}
-                  >
-                    {selectedNodeService.type}
-                  </span>
                 </div>
               </div>
 
