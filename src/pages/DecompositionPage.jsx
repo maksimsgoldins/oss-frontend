@@ -1,37 +1,68 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
 export default function DecompositionPage() {
   const [services, setServices] = useState([]);
   const [relations, setRelations] = useState([]);
   const [mappings, setMappings] = useState([]);
+  const [orderAims, setOrderAims] = useState([]);
   const [selectedParentServiceId, setSelectedParentServiceId] = useState("");
   const [form, setForm] = useState({
-    id:null,
-    parent_service_id:"",
-    parent_order_aim_id:"",
-    parent_order_sub_aim_id:"",
-    child_service_id:"",
-    child_order_aim_id:"",
-    child_order_sub_aim_id:"",
-    instantiation_mode:"CREATE"
+    id: null,
+    parent_service_id: "",
+    parent_order_aim_id: "",
+    parent_order_sub_aim_id: "",
+    child_service_id: "",
+    child_order_aim_id: "",
+    child_order_sub_aim_id: "",
+    instantiation_mode: "CREATE"
   });
   const [error, setError] = useState("");
 
   async function load() {
     try {
-      const [svc, rel, map] = await Promise.all([
+      const [svc, rel, map, aims] = await Promise.all([
         api.listServices(),
         api.listRelations(),
-        api.listServiceAimMappings()
+        api.listServiceAimMappings(),
+        api.listOrderAims()
       ]);
-      setServices(svc); setRelations(rel); setMappings(map);
-    } catch (err) { setError(err.message); }
+      setServices(svc);
+      setRelations(rel);
+      setMappings(map);
+      setOrderAims(aims);
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   function mappingsFor(serviceId) {
     return mappings.filter(m => m.service_id === serviceId);
+  }
+
+  function serviceLabel(serviceId) {
+    const s = services.find(x => x.id === serviceId);
+    return s ? `${s.name} (${s.type})` : serviceId;
+  }
+
+  function aimLabel(aimId) {
+    const aim = orderAims.find(a => a.id === aimId);
+    return aim ? (aim.name || aim.code) : aimId;
+  }
+
+  function subAimLabel(aimId, subAimId) {
+    const aim = orderAims.find(a => a.id === aimId);
+    if (!aim) return subAimId;
+    const sub = (aim.sub_aims || []).find(sa => sa.id === subAimId);
+    return sub ? (sub.name || sub.code) : subAimId;
+  }
+
+  function mappingLabel(mapping) {
+    return `${aimLabel(mapping.order_aim_id)} / ${subAimLabel(mapping.order_aim_id, mapping.order_sub_aim_id)}`;
   }
 
   async function save() {
@@ -58,116 +89,238 @@ export default function DecompositionPage() {
           instantiation_mode: form.instantiation_mode
         });
       }
-      setForm({ id:null,parent_service_id:"",parent_order_aim_id:"",parent_order_sub_aim_id:"",child_service_id:"",child_order_aim_id:"",child_order_sub_aim_id:"",instantiation_mode:"CREATE" });
+
+      setForm({
+        id: null,
+        parent_service_id: "",
+        parent_order_aim_id: "",
+        parent_order_sub_aim_id: "",
+        child_service_id: "",
+        child_order_aim_id: "",
+        child_order_sub_aim_id: "",
+        instantiation_mode: "CREATE"
+      });
+
       await load();
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
 
   async function remove(id) {
     if (!confirm("Delete decomposition?")) return;
-    try { await api.deleteRelation(id); await load(); } catch (err) { setError(err.message); }
+    try {
+      await api.deleteRelation(id);
+      await load();
+    } catch (err) {
+      setError(err?.message || JSON.stringify(err));
+    }
   }
 
-  const filteredRelations = selectedParentServiceId ? relations.filter(r => r.parent_service_id === selectedParentServiceId) : relations;
+  const filteredRelations = selectedParentServiceId
+    ? relations.filter(r => r.parent_service_id === selectedParentServiceId)
+    : relations;
 
   return (
     <>
       <div className="panel">
         <div className="header-line">
-          <div><h2 style={{marginTop:0, marginBottom:4}}>Manage Decomposition</h2><div className="muted">DecomposeTo is stored, DecomposeFrom is the reverse view.</div></div>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Manage Decomposition</h2>
+            <div className="muted">DecomposeTo is stored, DecomposeFrom is the reverse view.</div>
+          </div>
         </div>
       </div>
 
       <div className="panel">
         <div className="split">
-          <div className="panel" style={{boxShadow:"none", padding:0}}>
+          <div className="panel" style={{ boxShadow: "none", padding: 0 }}>
             <h3>Parent</h3>
             <div className="field">
               <label>Parent Service</label>
-              <select value={form.parent_service_id} onChange={e => setForm({ ...form, parent_service_id:e.target.value, parent_order_aim_id:"", parent_order_sub_aim_id:"" })}>
+              <select
+                value={form.parent_service_id}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    parent_service_id: e.target.value,
+                    parent_order_aim_id: "",
+                    parent_order_sub_aim_id: ""
+                  })
+                }
+              >
                 <option value="">Select parent</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type})</option>)}
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.type})
+                  </option>
+                ))}
               </select>
             </div>
+
             <div className="field">
               <label>Parent Mapping</label>
-              <select value={`${form.parent_order_aim_id}|${form.parent_order_sub_aim_id}`} onChange={e => {
-                const [aim, sub] = e.target.value.split("|");
-                setForm({ ...form, parent_order_aim_id: aim || "", parent_order_sub_aim_id: sub || "" });
-              }}>
+              <select
+                value={`${form.parent_order_aim_id}|${form.parent_order_sub_aim_id}`}
+                onChange={e => {
+                  const [aim, sub] = e.target.value.split("|");
+                  setForm({
+                    ...form,
+                    parent_order_aim_id: aim || "",
+                    parent_order_sub_aim_id: sub || ""
+                  });
+                }}
+              >
                 <option value="">Select mapping</option>
                 {mappingsFor(form.parent_service_id).map(m => (
-                  <option key={m.id} value={`${m.order_aim_id}|${m.order_sub_aim_id}`}>{m.order_aim_id} / {m.order_sub_aim_id}</option>
+                  <option key={m.id} value={`${m.order_aim_id}|${m.order_sub_aim_id}`}>
+                    {mappingLabel(m)}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div className="panel" style={{boxShadow:"none", padding:0}}>
+          <div className="panel" style={{ boxShadow: "none", padding: 0 }}>
             <h3>Child</h3>
             <div className="field">
               <label>Child Service / Resource</label>
-              <select value={form.child_service_id} onChange={e => setForm({ ...form, child_service_id:e.target.value, child_order_aim_id:"", child_order_sub_aim_id:"" })}>
+              <select
+                value={form.child_service_id}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    child_service_id: e.target.value,
+                    child_order_aim_id: "",
+                    child_order_sub_aim_id: ""
+                  })
+                }
+              >
                 <option value="">Select child</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type})</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Child Mapping</label>
-              <select value={`${form.child_order_aim_id}|${form.child_order_sub_aim_id}`} onChange={e => {
-                const [aim, sub] = e.target.value.split("|");
-                setForm({ ...form, child_order_aim_id: aim || "", child_order_sub_aim_id: sub || "" });
-              }}>
-                <option value="">Select mapping</option>
-                {mappingsFor(form.child_service_id).map(m => (
-                  <option key={m.id} value={`${m.order_aim_id}|${m.order_sub_aim_id}`}>{m.order_aim_id} / {m.order_sub_aim_id}</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.type})
+                  </option>
                 ))}
               </select>
             </div>
+
+            <div className="field">
+              <label>Child Mapping</label>
+              <select
+                value={`${form.child_order_aim_id}|${form.child_order_sub_aim_id}`}
+                onChange={e => {
+                  const [aim, sub] = e.target.value.split("|");
+                  setForm({
+                    ...form,
+                    child_order_aim_id: aim || "",
+                    child_order_sub_aim_id: sub || ""
+                  });
+                }}
+              >
+                <option value="">Select mapping</option>
+                {mappingsFor(form.child_service_id).map(m => (
+                  <option key={m.id} value={`${m.order_aim_id}|${m.order_sub_aim_id}`}>
+                    {mappingLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="field">
               <label>Instantiation</label>
-              <select value={form.instantiation_mode} onChange={e => setForm({ ...form, instantiation_mode:e.target.value })}>
+              <select
+                value={form.instantiation_mode}
+                onChange={e => setForm({ ...form, instantiation_mode: e.target.value })}
+              >
                 <option value="CREATE">CREATE</option>
                 <option value="REUSE">REUSE</option>
               </select>
             </div>
           </div>
         </div>
+
         <div className="row">
-          <button className="btn" onClick={save}>{form.id ? "Save" : "Create"}</button>
-          <button className="btn secondary" onClick={() => setForm({ id:null,parent_service_id:"",parent_order_aim_id:"",parent_order_sub_aim_id:"",child_service_id:"",child_order_aim_id:"",child_order_sub_aim_id:"",instantiation_mode:"CREATE" })}>Clear</button>
+          <button className="btn" onClick={save}>
+            {form.id ? "Save" : "Create"}
+          </button>
+          <button
+            className="btn secondary"
+            onClick={() =>
+              setForm({
+                id: null,
+                parent_service_id: "",
+                parent_order_aim_id: "",
+                parent_order_sub_aim_id: "",
+                child_service_id: "",
+                child_order_aim_id: "",
+                child_order_sub_aim_id: "",
+                instantiation_mode: "CREATE"
+              })
+            }
+          >
+            Clear
+          </button>
         </div>
+
         {error && <div className="error">{error}</div>}
       </div>
 
       <div className="panel">
         <div className="field">
           <label>Show relations for parent service</label>
-          <select value={selectedParentServiceId} onChange={e => setSelectedParentServiceId(e.target.value)}>
+          <select
+            value={selectedParentServiceId}
+            onChange={e => setSelectedParentServiceId(e.target.value)}
+          >
             <option value="">All parents</option>
-            {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {services.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
           </select>
         </div>
 
         {filteredRelations.map(rel => (
           <div className="item-card" key={rel.id}>
-            <div><strong>DecomposeTo</strong>: {rel.parent_service_id} / {rel.parent_order_aim_id} / {rel.parent_order_sub_aim_id} → {rel.child_service_id} / {rel.child_order_aim_id} / {rel.child_order_sub_aim_id}</div>
-            <div className="muted" style={{marginTop:6}}>DecomposeFrom: reverse view | mode: {rel.instantiation_mode}</div>
-            <div className="row" style={{marginTop:10}}>
-              <button className="btn secondary" onClick={() => setForm({
-                id: rel.id,
-                parent_service_id: rel.parent_service_id,
-                parent_order_aim_id: rel.parent_order_aim_id,
-                parent_order_sub_aim_id: rel.parent_order_sub_aim_id,
-                child_service_id: rel.child_service_id,
-                child_order_aim_id: rel.child_order_aim_id,
-                child_order_sub_aim_id: rel.child_order_sub_aim_id,
-                instantiation_mode: rel.instantiation_mode
-              })}>Edit</button>
-              <button className="btn danger" onClick={() => remove(rel.id)}>Delete</button>
+            <div>
+              <strong>DecomposeTo:</strong>{" "}
+              {serviceLabel(rel.parent_service_id)} / {aimLabel(rel.parent_order_aim_id)} / {subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)}
+              {" → "}
+              {serviceLabel(rel.child_service_id)} / {aimLabel(rel.child_order_aim_id)} / {subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)}
+            </div>
+
+            <div className="muted" style={{ marginTop: 6 }}>
+              DecomposeFrom: reverse view | mode: {rel.instantiation_mode}
+            </div>
+
+            <div className="row" style={{ marginTop: 10 }}>
+              <button
+                className="btn secondary"
+                onClick={() =>
+                  setForm({
+                    id: rel.id,
+                    parent_service_id: rel.parent_service_id,
+                    parent_order_aim_id: rel.parent_order_aim_id,
+                    parent_order_sub_aim_id: rel.parent_order_sub_aim_id,
+                    child_service_id: rel.child_service_id,
+                    child_order_aim_id: rel.child_order_aim_id,
+                    child_order_sub_aim_id: rel.child_order_sub_aim_id,
+                    instantiation_mode: rel.instantiation_mode
+                  })
+                }
+              >
+                Edit
+              </button>
+
+              <button className="btn danger" onClick={() => remove(rel.id)}>
+                Delete
+              </button>
             </div>
           </div>
         ))}
+
         {!filteredRelations.length && <div className="muted">No decomposition relations.</div>}
       </div>
     </>
