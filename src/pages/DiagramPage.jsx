@@ -1,14 +1,105 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  MarkerType,
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { api } from "../api/client";
+
+function serviceTypeColor(serviceType) {
+  if (serviceType === "CFS") return "#dbeafe";
+  if (serviceType === "RFS") return "#dcfce7";
+  if (serviceType === "Resource") return "#ffedd5";
+  return "#f3f4f6";
+}
+
+function serviceTypeBorderColor(serviceType) {
+  if (serviceType === "CFS") return "#93c5fd";
+  if (serviceType === "RFS") return "#86efac";
+  if (serviceType === "Resource") return "#fdba74";
+  return "#94a3b8";
+}
+
+function serviceTypeTextColor(serviceType) {
+  if (serviceType === "CFS") return "#1d4ed8";
+  if (serviceType === "RFS") return "#15803d";
+  if (serviceType === "Resource") return "#c2410c";
+  return "#475569";
+}
+
+function TypeBadge({ serviceType }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.03em",
+        background: "#ffffffaa",
+        border: `1px solid ${serviceTypeBorderColor(serviceType)}`,
+        color: serviceTypeTextColor(serviceType),
+        marginBottom: 6,
+      }}
+    >
+      {serviceType || "Service"}
+    </span>
+  );
+}
+
+function ServiceNode({ data, selected }) {
+  return (
+    <div
+      style={{
+        minWidth: 250,
+        maxWidth: 250,
+        borderRadius: 14,
+        padding: 12,
+        background: serviceTypeColor(data.serviceType),
+        border: selected
+          ? "3px solid #2563eb"
+          : `1px solid ${serviceTypeBorderColor(data.serviceType)}`,
+        boxShadow: selected
+          ? "0 0 0 3px rgba(37,99,235,0.15)"
+          : "0 2px 6px rgba(0,0,0,0.08)",
+      }}
+    >
+      <TypeBadge serviceType={data.serviceType} />
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: 14,
+          lineHeight: 1.25,
+          color: "#0f172a",
+          marginBottom: 6,
+          wordBreak: "break-word",
+        }}
+      >
+        {data.serviceName}
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          lineHeight: 1.35,
+          color: "#334155",
+          wordBreak: "break-word",
+        }}
+      >
+        {data.aimLabel} / {data.subAimLabel}
+      </div>
+    </div>
+  );
+}
+
+const nodeTypes = {
+  serviceNode: ServiceNode,
+};
 
 function DiagramInner() {
   const [services, setServices] = useState([]);
@@ -20,6 +111,7 @@ function DiagramInner() {
   const [attributes, setAttributes] = useState([]);
 
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [serviceToAdd, setServiceToAdd] = useState("");
 
   const [focusParentServiceId, setFocusParentServiceId] = useState("");
   const [focusAimId, setFocusAimId] = useState("");
@@ -29,7 +121,6 @@ function DiagramInner() {
   const [selectedNodeId, setSelectedNodeId] = useState("");
 
   const [viewMode, setViewMode] = useState("FULL");
-
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
 
@@ -106,19 +197,10 @@ function DiagramInner() {
     return { serviceId, aimId, subAimId };
   }
 
-  function serviceTypeColor(serviceType) {
-    if (serviceType === "CFS") return "#dbeafe";
-    if (serviceType === "RFS") return "#dcfce7";
-    if (serviceType === "Resource") return "#ffedd5";
-    return "#f3f4f6";
-  }
-
-  function serviceTypeBorderColor(serviceType) {
-    if (serviceType === "CFS") return "#93c5fd";
-    if (serviceType === "RFS") return "#86efac";
-    if (serviceType === "Resource") return "#fdba74";
-    return "#94a3b8";
-  }
+  const availableServicesToAdd = useMemo(
+    () => services.filter(s => !selectedServiceIds.includes(s.id)),
+    [services, selectedServiceIds]
+  );
 
   const serviceFilteredRelations = useMemo(() => {
     if (!selectedServiceIds.length) return relations;
@@ -249,20 +331,14 @@ function DiagramInner() {
         const svc = serviceMap[rel.parent_service_id];
         nodeMap.set(parentKey, {
           id: parentKey,
+          type: "serviceNode",
           data: {
-            label: `${svc?.name || rel.parent_service_id}\n${aimLabel(rel.parent_order_aim_id)} / ${subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)}`,
-            serviceType: svc?.type || ""
+            serviceName: svc?.name || rel.parent_service_id,
+            serviceType: svc?.type || "",
+            aimLabel: aimLabel(rel.parent_order_aim_id),
+            subAimLabel: subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)
           },
-          position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 },
-          style: {
-            border: `1px solid ${serviceTypeBorderColor(svc?.type || "")}`,
-            borderRadius: 14,
-            padding: 10,
-            background: serviceTypeColor(svc?.type || ""),
-            width: 250,
-            whiteSpace: "pre-line",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-          }
+          position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 }
         });
       }
 
@@ -270,20 +346,14 @@ function DiagramInner() {
         const svc = serviceMap[rel.child_service_id];
         nodeMap.set(childKey, {
           id: childKey,
+          type: "serviceNode",
           data: {
-            label: `${svc?.name || rel.child_service_id}\n${aimLabel(rel.child_order_aim_id)} / ${subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)}`,
-            serviceType: svc?.type || ""
+            serviceName: svc?.name || rel.child_service_id,
+            serviceType: svc?.type || "",
+            aimLabel: aimLabel(rel.child_order_aim_id),
+            subAimLabel: subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)
           },
-          position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 },
-          style: {
-            border: `1px solid ${serviceTypeBorderColor(svc?.type || "")}`,
-            borderRadius: 14,
-            padding: 10,
-            background: serviceTypeColor(svc?.type || ""),
-            width: 250,
-            whiteSpace: "pre-line",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-          }
+          position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 }
         });
       }
 
@@ -292,9 +362,10 @@ function DiagramInner() {
         source: parentKey,
         target: childKey,
         label: rel.instantiation_mode,
-        type: "smoothstep",
+        type: "default",
         animated: false,
-        style: { stroke: "#64748b", strokeWidth: 1.5 },
+        style: { stroke: "#64748b", strokeWidth: 1.8 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#64748b" },
         data: { relationId: rel.id }
       });
     });
@@ -306,11 +377,7 @@ function DiagramInner() {
       if (savedLayout) {
         return {
           ...node,
-          position: { x: Number(savedLayout.x), y: Number(savedLayout.y) },
-          style: {
-            ...node.style,
-            width: savedLayout.width ? Number(savedLayout.width) : node.style.width
-          }
+          position: { x: Number(savedLayout.x), y: Number(savedLayout.y) }
         };
       }
       return node;
@@ -325,42 +392,21 @@ function DiagramInner() {
   }, [graphData, setNodes, setEdges]);
 
   useEffect(() => {
-    setNodes(prev =>
-      prev.map(node => {
-        const isSelected = node.id === selectedNodeId;
-        return {
-          ...node,
-          style: {
-            ...node.style,
-            border: isSelected
-              ? "3px solid #2563eb"
-              : node.style.border,
-            boxShadow: isSelected
-              ? "0 0 0 3px rgba(37,99,235,0.15)"
-              : "0 1px 3px rgba(0,0,0,0.08)"
-          }
-        };
-      })
-    );
-  }, [selectedNodeId, setNodes]);
-
-  useEffect(() => {
     setEdges(prev =>
       prev.map(edge => ({
         ...edge,
         animated: edge.id === selectedEdgeId,
         style:
           edge.id === selectedEdgeId
-            ? { ...(edge.style || {}), strokeWidth: 3, stroke: "#2563eb" }
-            : { ...(edge.style || {}), strokeWidth: 1.5, stroke: "#64748b" }
+            ? { ...(edge.style || {}), strokeWidth: 3.2, stroke: "#2563eb" }
+            : { ...(edge.style || {}), strokeWidth: 1.8, stroke: "#64748b" },
+        markerEnd:
+          edge.id === selectedEdgeId
+            ? { type: MarkerType.ArrowClosed, width: 20, height: 20, color: "#2563eb" }
+            : { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#64748b" }
       }))
     );
   }, [selectedEdgeId, setEdges]);
-
-  const onMultiSelectChange = useCallback((setter) => (event) => {
-    const values = Array.from(event.target.selectedOptions).map(o => o.value);
-    setter(values);
-  }, []);
 
   async function saveLayout() {
     try {
@@ -369,8 +415,8 @@ function DiagramInner() {
         node_key: n.id,
         x: n.position.x,
         y: n.position.y,
-        width: typeof n.width === "number" ? n.width : 250,
-        height: typeof n.height === "number" ? n.height : 90
+        width: 250,
+        height: 90
       }));
       await api.replaceDiagramLayout(payload);
       setSaved("Layout saved.");
@@ -389,8 +435,20 @@ function DiagramInner() {
     ? involvements.filter(i => i.service_id === selectedNode.serviceId)
     : [];
 
+  function addServiceFilter() {
+    if (!serviceToAdd) return;
+    if (selectedServiceIds.includes(serviceToAdd)) return;
+    setSelectedServiceIds(prev => [...prev, serviceToAdd]);
+    setServiceToAdd("");
+  }
+
+  function removeServiceFilter(serviceId) {
+    setSelectedServiceIds(prev => prev.filter(x => x !== serviceId));
+  }
+
   function clearFilters() {
     setSelectedServiceIds([]);
+    setServiceToAdd("");
     setFocusParentServiceId("");
     setFocusAimId("");
     setFocusSubAimId("");
@@ -400,6 +458,25 @@ function DiagramInner() {
     setSelectedEdgeId("");
     setSelectedNodeId("");
     setViewMode("FULL");
+  }
+
+  function useNodeAsFocus() {
+    if (!selectedNode) return;
+    setFocusParentServiceId(selectedNode.serviceId);
+    setFocusAimId(selectedNode.aimId);
+    setFocusSubAimId(selectedNode.subAimId);
+  }
+
+  function showSubtreeFromNode() {
+    if (!selectedNode) return;
+    useNodeAsFocus();
+    setViewMode("SUBTREE_ONLY");
+  }
+
+  function expandFromNode() {
+    if (!selectedNode) return;
+    useNodeAsFocus();
+    setViewMode("EXPAND_FROM_NODE");
   }
 
   return (
@@ -425,14 +502,34 @@ function DiagramInner() {
 
         <div className="split">
           <div className="field">
-            <label>Filter by services (optional)</label>
-            <select multiple value={selectedServiceIds} onChange={onMultiSelectChange(setSelectedServiceIds)} style={{ minHeight: 110 }}>
-              {services.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.type})
-                </option>
-              ))}
-            </select>
+            <label>Add service filter</label>
+            <div className="row">
+              <select value={serviceToAdd} onChange={e => setServiceToAdd(e.target.value)}>
+                <option value="">Select service</option>
+                {availableServicesToAdd.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.type})
+                  </option>
+                ))}
+              </select>
+              <button className="btn secondary" type="button" onClick={addServiceFilter}>Add</button>
+            </div>
+            {!!selectedServiceIds.length && (
+              <div className="row" style={{ marginTop: 8 }}>
+                {selectedServiceIds.map(id => (
+                  <span key={id} className="pill">
+                    {serviceLabel(id)}{" "}
+                    <button
+                      type="button"
+                      onClick={() => removeServiceFilter(id)}
+                      style={{ border: "none", background: "transparent", cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="field">
@@ -501,8 +598,8 @@ function DiagramInner() {
             <option value="EXPAND_FROM_NODE">Expand from selected node</option>
           </select>
           <div className="muted">
-            `FOCUS_ONLY` uses Focus Parent Service / Aim / Sub-aim.
-            `SUBTREE_ONLY` and `EXPAND_FROM_NODE` use clicked node first, and fall back to focus scenario if set.
+            `FOCUS_ONLY` uses Focus Parent Service / Aim / Sub-aim. `SUBTREE_ONLY` and `EXPAND_FROM_NODE`
+            use clicked node first, then fall back to focus scenario if set.
           </div>
         </div>
 
@@ -515,6 +612,7 @@ function DiagramInner() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onEdgeClick={(_, edge) => {
@@ -582,6 +680,11 @@ function DiagramInner() {
                 <div><strong>Service:</strong> {selectedNodeService.name} ({selectedNodeService.type})</div>
                 <div className="muted" style={{ marginTop: 6 }}>
                   {aimLabel(selectedNode.aimId)} / {subAimLabel(selectedNode.aimId, selectedNode.subAimId)}
+                </div>
+                <div className="row" style={{ marginTop: 10 }}>
+                  <button className="btn secondary" type="button" onClick={useNodeAsFocus}>Use as focus</button>
+                  <button className="btn secondary" type="button" onClick={showSubtreeFromNode}>Show subtree</button>
+                  <button className="btn secondary" type="button" onClick={expandFromNode}>Expand from here</button>
                 </div>
               </div>
 
