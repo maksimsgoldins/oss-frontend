@@ -26,6 +26,8 @@ function DiagramInner() {
   const [selectedEdgeId, setSelectedEdgeId] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState("");
 
+  const [viewMode, setViewMode] = useState("FULL"); // FULL | SUBTREE_ONLY | EXPAND_FROM_NODE
+
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
 
@@ -102,6 +104,20 @@ function DiagramInner() {
     return { serviceId, aimId, subAimId };
   }
 
+  function serviceTypeColor(serviceType) {
+    if (serviceType === "CFS") return "#dbeafe";
+    if (serviceType === "RFS") return "#dcfce7";
+    if (serviceType === "Resource") return "#ffedd5";
+    return "#f3f4f6";
+  }
+
+  function serviceTypeBadgeColor(serviceType) {
+    if (serviceType === "CFS") return "#2563eb";
+    if (serviceType === "RFS") return "#16a34a";
+    if (serviceType === "Resource") return "#ea580c";
+    return "#64748b";
+  }
+
   const availableSubAims = useMemo(() => {
     if (!selectedAimIds.length) return [];
     return orderAims
@@ -109,7 +125,7 @@ function DiagramInner() {
       .flatMap(a => (a.sub_aims || []).map(sa => ({ ...sa, order_aim_id: a.id })));
   }, [orderAims, selectedAimIds]);
 
-  const filteredRelations = useMemo(() => {
+  const baseFilteredRelations = useMemo(() => {
     return relations.filter(r => {
       const serviceMatch =
         !selectedServiceIds.length ||
@@ -130,6 +146,91 @@ function DiagramInner() {
     });
   }, [relations, selectedServiceIds, selectedAimIds, selectedSubAimIds]);
 
+  const relationGraph = useMemo(() => {
+    const children = new Map();
+    const parents = new Map();
+
+    baseFilteredRelations.forEach(rel => {
+      const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
+      const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
+
+      if (!children.has(parentKey)) children.set(parentKey, []);
+      if (!parents.has(childKey)) parents.set(childKey, []);
+
+      children.get(parentKey).push({ relation: rel, nodeKey: childKey });
+      parents.get(childKey).push({ relation: rel, nodeKey: parentKey });
+    });
+
+    return { children, parents };
+  }, [baseFilteredRelations]);
+
+  const subtreeNodeKeys = useMemo(() => {
+    if (!selectedNodeId || viewMode === "FULL") return null;
+
+    const visited = new Set();
+    const queue = [selectedNodeId];
+    visited.add(selectedNodeId);
+
+    while (queue.length) {
+      const current = queue.shift();
+      const nextChildren = relationGraph.children.get(current) || [];
+      nextChildren.forEach(item => {
+        if (!visited.has(item.nodeKey)) {
+          visited.add(item.nodeKey);
+          queue.push(item.nodeKey);
+        }
+      });
+    }
+
+    return visited;
+  }, [selectedNodeId, viewMode, relationGraph]);
+
+  const expandedNodeKeys = useMemo(() => {
+    if (!selectedNodeId || viewMode !== "EXPAND_FROM_NODE") return null;
+
+    const visited = new Set();
+    const queue = [selectedNodeId];
+    visited.add(selectedNodeId);
+
+    while (queue.length) {
+      const current = queue.shift();
+
+      const nextChildren = relationGraph.children.get(current) || [];
+      nextChildren.forEach(item => {
+        if (!visited.has(item.nodeKey)) {
+          visited.add(item.nodeKey);
+          queue.push(item.nodeKey);
+        }
+      });
+
+      const nextParents = relationGraph.parents.get(current) || [];
+      nextParents.forEach(item => {
+        if (!visited.has(item.nodeKey)) {
+          visited.add(item.nodeKey);
+          queue.push(item.nodeKey);
+        }
+      });
+    }
+
+    return visited;
+  }, [selectedNodeId, viewMode, relationGraph]);
+
+  const activeNodeKeys = useMemo(() => {
+    if (viewMode === "SUBTREE_ONLY") return subtreeNodeKeys;
+    if (viewMode === "EXPAND_FROM_NODE") return expandedNodeKeys;
+    return null;
+  }, [viewMode, subtreeNodeKeys, expandedNodeKeys]);
+
+  const filteredRelations = useMemo(() => {
+    if (!activeNodeKeys) return baseFilteredRelations;
+
+    return baseFilteredRelations.filter(rel => {
+      const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
+      const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
+      return activeNodeKeys.has(parentKey) && activeNodeKeys.has(childKey);
+    });
+  }, [baseFilteredRelations, activeNodeKeys]);
+
   const graphData = useMemo(() => {
     const nodeMap = new Map();
     const nextEdges = [];
@@ -140,38 +241,46 @@ function DiagramInner() {
 
       if (!nodeMap.has(parentKey)) {
         const svc = serviceMap[rel.parent_service_id];
+        const serviceType = svc?.type || "";
+        const isSelected = selectedNodeId === parentKey;
         nodeMap.set(parentKey, {
           id: parentKey,
           data: {
-            label: `${svc?.name || rel.parent_service_id}\n${aimLabel(rel.parent_order_aim_id)} / ${subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)}`
+            label: `${svc?.name || rel.parent_service_id}\n${aimLabel(rel.parent_order_aim_id)} / ${subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)}`,
+            serviceType
           },
           position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 },
           style: {
-            border: selectedNodeId === parentKey ? "2px solid #2563eb" : "1px solid #94a3b8",
-            borderRadius: 12,
-            padding: 8,
-            background: "#ffffff",
-            width: 240,
-            whiteSpace: "pre-line"
+            border: isSelected ? "3px solid #2563eb" : "1px solid #94a3b8",
+            borderRadius: 14,
+            padding: 10,
+            background: serviceTypeColor(serviceType),
+            width: 250,
+            whiteSpace: "pre-line",
+            boxShadow: isSelected ? "0 0 0 3px rgba(37,99,235,0.15)" : "0 1px 3px rgba(0,0,0,0.08)"
           }
         });
       }
 
       if (!nodeMap.has(childKey)) {
         const svc = serviceMap[rel.child_service_id];
+        const serviceType = svc?.type || "";
+        const isSelected = selectedNodeId === childKey;
         nodeMap.set(childKey, {
           id: childKey,
           data: {
-            label: `${svc?.name || rel.child_service_id}\n${aimLabel(rel.child_order_aim_id)} / ${subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)}`
+            label: `${svc?.name || rel.child_service_id}\n${aimLabel(rel.child_order_aim_id)} / ${subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)}`,
+            serviceType
           },
           position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 },
           style: {
-            border: selectedNodeId === childKey ? "2px solid #2563eb" : "1px solid #94a3b8",
-            borderRadius: 12,
-            padding: 8,
-            background: "#ffffff",
-            width: 240,
-            whiteSpace: "pre-line"
+            border: isSelected ? "3px solid #2563eb" : "1px solid #94a3b8",
+            borderRadius: 14,
+            padding: 10,
+            background: serviceTypeColor(serviceType),
+            width: 250,
+            whiteSpace: "pre-line",
+            boxShadow: isSelected ? "0 0 0 3px rgba(37,99,235,0.15)" : "0 1px 3px rgba(0,0,0,0.08)"
           }
         });
       }
@@ -182,8 +291,8 @@ function DiagramInner() {
         target: childKey,
         label: rel.instantiation_mode,
         type: "smoothstep",
-        animated: false,
-        style: selectedEdgeId === rel.id ? { strokeWidth: 3 } : {},
+        animated: selectedEdgeId === rel.id,
+        style: selectedEdgeId === rel.id ? { strokeWidth: 3, stroke: "#2563eb" } : { stroke: "#64748b" },
         data: { relationId: rel.id }
       });
     });
@@ -225,8 +334,8 @@ function DiagramInner() {
         node_key: n.id,
         x: n.position.x,
         y: n.position.y,
-        width: typeof n.width === "number" ? n.width : 240,
-        height: typeof n.height === "number" ? n.height : 80
+        width: typeof n.width === "number" ? n.width : 250,
+        height: typeof n.height === "number" ? n.height : 90
       }));
       await api.replaceDiagramLayout(payload);
       setSaved("Layout saved.");
@@ -251,6 +360,12 @@ function DiagramInner() {
     setSelectedSubAimIds([]);
   }
 
+  function clearSelection() {
+    setSelectedEdgeId("");
+    setSelectedNodeId("");
+    setViewMode("FULL");
+  }
+
   return (
     <>
       <div className="panel">
@@ -263,8 +378,15 @@ function DiagramInner() {
           </div>
           <div className="row">
             <button className="btn secondary" onClick={clearFilters}>Clear filters</button>
+            <button className="btn secondary" onClick={clearSelection}>Clear selection</button>
             <button className="btn" onClick={saveLayout}>Save layout</button>
           </div>
+        </div>
+
+        <div className="row" style={{ marginBottom: 12 }}>
+          <span className="pill" style={{ background: "#dbeafe", border: "1px solid #93c5fd" }}>CFS</span>
+          <span className="pill" style={{ background: "#dcfce7", border: "1px solid #86efac" }}>RFS</span>
+          <span className="pill" style={{ background: "#ffedd5", border: "1px solid #fdba74" }}>Resource</span>
         </div>
 
         <div className="split">
@@ -301,6 +423,16 @@ function DiagramInner() {
             ))}
           </select>
           <div className="muted">If no aim is selected, sub-aim filter list stays empty.</div>
+        </div>
+
+        <div className="field">
+          <label>View mode</label>
+          <select value={viewMode} onChange={e => setViewMode(e.target.value)} disabled={!selectedNodeId}>
+            <option value="FULL">Full graph</option>
+            <option value="SUBTREE_ONLY">Show only selected subtree</option>
+            <option value="EXPAND_FROM_NODE">Expand from selected node</option>
+          </select>
+          <div className="muted">Select a node first to enable subtree modes.</div>
         </div>
 
         {saved && <div className="muted" style={{ marginTop: 8 }}>{saved}</div>}
@@ -379,6 +511,17 @@ function DiagramInner() {
                 <div><strong>Service:</strong> {selectedNodeService.name} ({selectedNodeService.type})</div>
                 <div className="muted" style={{ marginTop: 6 }}>
                   {aimLabel(selectedNode.aimId)} / {subAimLabel(selectedNode.aimId, selectedNode.subAimId)}
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <span
+                    className="pill"
+                    style={{
+                      background: serviceTypeColor(selectedNodeService.type),
+                      border: `1px solid ${serviceTypeBadgeColor(selectedNodeService.type)}`
+                    }}
+                  >
+                    {selectedNodeService.type}
+                  </span>
                 </div>
               </div>
 
