@@ -7,6 +7,8 @@ import ReactFlow, {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  Handle,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { api } from "../api/client";
@@ -68,9 +70,33 @@ function ServiceNode({ data, selected }) {
         boxShadow: selected
           ? "0 0 0 3px rgba(37,99,235,0.15)"
           : "0 2px 6px rgba(0,0,0,0.08)",
+        position: "relative",
       }}
     >
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          border: "1px solid #64748b",
+          background: "#fff",
+        }}
+      />
+
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{
+          width: 10,
+          height: 10,
+          border: "1px solid #64748b",
+          background: "#fff",
+        }}
+      />
+
       <TypeBadge serviceType={data.serviceType} />
+
       <div
         style={{
           fontWeight: 700,
@@ -83,6 +109,7 @@ function ServiceNode({ data, selected }) {
       >
         {data.serviceName}
       </div>
+
       <div
         style={{
           fontSize: 12,
@@ -136,7 +163,7 @@ function DiagramInner() {
         api.listDiagramLayout(),
         api.listAttributeInvolvement(),
         api.listAttributePropagation(),
-        api.listAttributes()
+        api.listAttributes(),
       ]);
       setServices(svc);
       setRelations(rel);
@@ -155,21 +182,33 @@ function DiagramInner() {
     load();
   }, []);
 
-  const serviceMap = useMemo(() => Object.fromEntries(services.map(s => [s.id, s])), [services]);
-  const aimMap = useMemo(() => Object.fromEntries(orderAims.map(a => [a.id, a])), [orderAims]);
-  const attributeMap = useMemo(() => Object.fromEntries(attributes.map(a => [a.id, a])), [attributes]);
-  const involvementMap = useMemo(() => Object.fromEntries(involvements.map(i => [i.id, i])), [involvements]);
+  const serviceMap = useMemo(
+    () => Object.fromEntries(services.map((s) => [s.id, s])),
+    [services]
+  );
+  const aimMap = useMemo(
+    () => Object.fromEntries(orderAims.map((a) => [a.id, a])),
+    [orderAims]
+  );
+  const attributeMap = useMemo(
+    () => Object.fromEntries(attributes.map((a) => [a.id, a])),
+    [attributes]
+  );
+  const involvementMap = useMemo(
+    () => Object.fromEntries(involvements.map((i) => [i.id, i])),
+    [involvements]
+  );
 
   function aimLabel(aimId) {
     const aim = aimMap[aimId];
-    return aim ? (aim.name || aim.code) : aimId;
+    return aim ? aim.name || aim.code : aimId;
   }
 
   function subAimLabel(aimId, subAimId) {
     const aim = aimMap[aimId];
     if (!aim) return subAimId;
-    const sub = (aim.sub_aims || []).find(x => x.id === subAimId);
-    return sub ? (sub.name || sub.code) : subAimId;
+    const sub = (aim.sub_aims || []).find((x) => x.id === subAimId);
+    return sub ? sub.name || sub.code : subAimId;
   }
 
   function serviceLabel(serviceId) {
@@ -179,7 +218,7 @@ function DiagramInner() {
 
   function attributeLabel(attributeId) {
     const attr = attributeMap[attributeId];
-    return attr ? (attr.name || attr.code) : attributeId;
+    return attr ? attr.name || attr.code : attributeId;
   }
 
   function involvementLabel(involvementId) {
@@ -198,14 +237,14 @@ function DiagramInner() {
   }
 
   const availableServicesToAdd = useMemo(
-    () => services.filter(s => !selectedServiceIds.includes(s.id)),
+    () => services.filter((s) => !selectedServiceIds.includes(s.id)),
     [services, selectedServiceIds]
   );
 
   const serviceFilteredRelations = useMemo(() => {
     if (!selectedServiceIds.length) return relations;
     return relations.filter(
-      r =>
+      (r) =>
         selectedServiceIds.includes(r.parent_service_id) ||
         selectedServiceIds.includes(r.child_service_id)
     );
@@ -213,27 +252,31 @@ function DiagramInner() {
 
   const availableFocusAims = useMemo(() => {
     if (!focusParentServiceId) return [];
-    const ids = [...new Set(
-      serviceFilteredRelations
-        .filter(r => r.parent_service_id === focusParentServiceId)
-        .map(r => r.parent_order_aim_id)
-    )];
-    return ids.map(id => aimMap[id]).filter(Boolean);
+    const ids = [
+      ...new Set(
+        serviceFilteredRelations
+          .filter((r) => r.parent_service_id === focusParentServiceId)
+          .map((r) => r.parent_order_aim_id)
+      ),
+    ];
+    return ids.map((id) => aimMap[id]).filter(Boolean);
   }, [focusParentServiceId, serviceFilteredRelations, aimMap]);
 
   const availableFocusSubAims = useMemo(() => {
     if (!focusParentServiceId || !focusAimId) return [];
-    const ids = [...new Set(
-      serviceFilteredRelations
-        .filter(
-          r =>
-            r.parent_service_id === focusParentServiceId &&
-            r.parent_order_aim_id === focusAimId
-        )
-        .map(r => r.parent_order_sub_aim_id)
-    )];
+    const ids = [
+      ...new Set(
+        serviceFilteredRelations
+          .filter(
+            (r) =>
+              r.parent_service_id === focusParentServiceId &&
+              r.parent_order_aim_id === focusAimId
+          )
+          .map((r) => r.parent_order_sub_aim_id)
+      ),
+    ];
     const aim = aimMap[focusAimId];
-    return (aim?.sub_aims || []).filter(sa => ids.includes(sa.id));
+    return (aim?.sub_aims || []).filter((sa) => ids.includes(sa.id));
   }, [focusParentServiceId, focusAimId, serviceFilteredRelations, aimMap]);
 
   const focusRootNodeId = useMemo(() => {
@@ -245,9 +288,17 @@ function DiagramInner() {
     const children = new Map();
     const parents = new Map();
 
-    serviceFilteredRelations.forEach(rel => {
-      const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
-      const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
+    serviceFilteredRelations.forEach((rel) => {
+      const parentKey = nodeKey(
+        rel.parent_service_id,
+        rel.parent_order_aim_id,
+        rel.parent_order_sub_aim_id
+      );
+      const childKey = nodeKey(
+        rel.child_service_id,
+        rel.child_order_aim_id,
+        rel.child_order_sub_aim_id
+      );
 
       if (!children.has(parentKey)) children.set(parentKey, []);
       if (!parents.has(childKey)) parents.set(childKey, []);
@@ -275,7 +326,7 @@ function DiagramInner() {
       const current = queue.shift();
 
       const nextChildren = relationIndex.children.get(current) || [];
-      nextChildren.forEach(item => {
+      nextChildren.forEach((item) => {
         if (!visited.has(item.nodeKey)) {
           visited.add(item.nodeKey);
           queue.push(item.nodeKey);
@@ -284,7 +335,7 @@ function DiagramInner() {
 
       if (viewMode === "EXPAND_FROM_NODE") {
         const nextParents = relationIndex.parents.get(current) || [];
-        nextParents.forEach(item => {
+        nextParents.forEach((item) => {
           if (!visited.has(item.nodeKey)) {
             visited.add(item.nodeKey);
             queue.push(item.nodeKey);
@@ -303,7 +354,7 @@ function DiagramInner() {
       if (!activeRootNodeId) return serviceFilteredRelations;
       const root = parseNodeKey(activeRootNodeId);
       return serviceFilteredRelations.filter(
-        r =>
+        (r) =>
           r.parent_service_id === root.serviceId &&
           r.parent_order_aim_id === root.aimId &&
           r.parent_order_sub_aim_id === root.subAimId
@@ -312,9 +363,17 @@ function DiagramInner() {
 
     if (!activeNodeSet) return serviceFilteredRelations;
 
-    return serviceFilteredRelations.filter(rel => {
-      const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
-      const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
+    return serviceFilteredRelations.filter((rel) => {
+      const parentKey = nodeKey(
+        rel.parent_service_id,
+        rel.parent_order_aim_id,
+        rel.parent_order_sub_aim_id
+      );
+      const childKey = nodeKey(
+        rel.child_service_id,
+        rel.child_order_aim_id,
+        rel.child_order_sub_aim_id
+      );
       return activeNodeSet.has(parentKey) && activeNodeSet.has(childKey);
     });
   }, [serviceFilteredRelations, viewMode, activeRootNodeId, activeNodeSet]);
@@ -324,8 +383,16 @@ function DiagramInner() {
     const nextEdges = [];
 
     filteredRelations.forEach((rel, idx) => {
-      const parentKey = nodeKey(rel.parent_service_id, rel.parent_order_aim_id, rel.parent_order_sub_aim_id);
-      const childKey = nodeKey(rel.child_service_id, rel.child_order_aim_id, rel.child_order_sub_aim_id);
+      const parentKey = nodeKey(
+        rel.parent_service_id,
+        rel.parent_order_aim_id,
+        rel.parent_order_sub_aim_id
+      );
+      const childKey = nodeKey(
+        rel.child_service_id,
+        rel.child_order_aim_id,
+        rel.child_order_sub_aim_id
+      );
 
       if (!nodeMap.has(parentKey)) {
         const svc = serviceMap[rel.parent_service_id];
@@ -336,9 +403,12 @@ function DiagramInner() {
             serviceName: svc?.name || rel.parent_service_id,
             serviceType: svc?.type || "",
             aimLabel: aimLabel(rel.parent_order_aim_id),
-            subAimLabel: subAimLabel(rel.parent_order_aim_id, rel.parent_order_sub_aim_id)
+            subAimLabel: subAimLabel(
+              rel.parent_order_aim_id,
+              rel.parent_order_sub_aim_id
+            ),
           },
-          position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 }
+          position: { x: 100 + nodeMap.size * 50, y: 100 + nodeMap.size * 30 },
         });
       }
 
@@ -351,9 +421,12 @@ function DiagramInner() {
             serviceName: svc?.name || rel.child_service_id,
             serviceType: svc?.type || "",
             aimLabel: aimLabel(rel.child_order_aim_id),
-            subAimLabel: subAimLabel(rel.child_order_aim_id, rel.child_order_sub_aim_id)
+            subAimLabel: subAimLabel(
+              rel.child_order_aim_id,
+              rel.child_order_sub_aim_id
+            ),
           },
-          position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 }
+          position: { x: 400 + nodeMap.size * 50, y: 150 + nodeMap.size * 30 },
         });
       }
 
@@ -362,22 +435,27 @@ function DiagramInner() {
         source: parentKey,
         target: childKey,
         label: rel.instantiation_mode,
-        type: "default",
+        type: "smoothstep",
         animated: false,
         style: { stroke: "#64748b", strokeWidth: 1.8 },
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#64748b" },
-        data: { relationId: rel.id }
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 18,
+          height: 18,
+          color: "#64748b",
+        },
+        data: { relationId: rel.id },
       });
     });
 
-    const layoutMap = Object.fromEntries(layoutRows.map(r => [r.node_key, r]));
+    const layoutMap = Object.fromEntries(layoutRows.map((r) => [r.node_key, r]));
 
-    const nextNodes = Array.from(nodeMap.values()).map(node => {
+    const nextNodes = Array.from(nodeMap.values()).map((node) => {
       const savedLayout = layoutMap[node.id];
       if (savedLayout) {
         return {
           ...node,
-          position: { x: Number(savedLayout.x), y: Number(savedLayout.y) }
+          position: { x: Number(savedLayout.x), y: Number(savedLayout.y) },
         };
       }
       return node;
@@ -392,8 +470,8 @@ function DiagramInner() {
   }, [graphData, setNodes, setEdges]);
 
   useEffect(() => {
-    setEdges(prev =>
-      prev.map(edge => ({
+    setEdges((prev) =>
+      prev.map((edge) => ({
         ...edge,
         animated: edge.id === selectedEdgeId,
         style:
@@ -402,8 +480,18 @@ function DiagramInner() {
             : { ...(edge.style || {}), strokeWidth: 1.8, stroke: "#64748b" },
         markerEnd:
           edge.id === selectedEdgeId
-            ? { type: MarkerType.ArrowClosed, width: 20, height: 20, color: "#2563eb" }
-            : { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#64748b" }
+            ? {
+                type: MarkerType.ArrowClosed,
+                width: 20,
+                height: 20,
+                color: "#2563eb",
+              }
+            : {
+                type: MarkerType.ArrowClosed,
+                width: 18,
+                height: 18,
+                color: "#64748b",
+              },
       }))
     );
   }, [selectedEdgeId, setEdges]);
@@ -411,12 +499,12 @@ function DiagramInner() {
   async function saveLayout() {
     try {
       setError("");
-      const payload = nodes.map(n => ({
+      const payload = nodes.map((n) => ({
         node_key: n.id,
         x: n.position.x,
         y: n.position.y,
         width: 250,
-        height: 90
+        height: 90,
       }));
       await api.replaceDiagramLayout(payload);
       setSaved("Layout saved.");
@@ -426,24 +514,28 @@ function DiagramInner() {
     }
   }
 
-  const selectedRelation = relations.find(r => r.id === selectedEdgeId);
-  const selectedPropagationRules = propagations.filter(p => p.relation_id === selectedEdgeId);
+  const selectedRelation = relations.find((r) => r.id === selectedEdgeId);
+  const selectedPropagationRules = propagations.filter(
+    (p) => p.relation_id === selectedEdgeId
+  );
 
   const selectedNode = selectedNodeId ? parseNodeKey(selectedNodeId) : null;
-  const selectedNodeService = selectedNode ? serviceMap[selectedNode.serviceId] : null;
+  const selectedNodeService = selectedNode
+    ? serviceMap[selectedNode.serviceId]
+    : null;
   const selectedNodeInvolvements = selectedNode
-    ? involvements.filter(i => i.service_id === selectedNode.serviceId)
+    ? involvements.filter((i) => i.service_id === selectedNode.serviceId)
     : [];
 
   function addServiceFilter() {
     if (!serviceToAdd) return;
     if (selectedServiceIds.includes(serviceToAdd)) return;
-    setSelectedServiceIds(prev => [...prev, serviceToAdd]);
+    setSelectedServiceIds((prev) => [...prev, serviceToAdd]);
     setServiceToAdd("");
   }
 
   function removeServiceFilter(serviceId) {
-    setSelectedServiceIds(prev => prev.filter(x => x !== serviceId));
+    setSelectedServiceIds((prev) => prev.filter((x) => x !== serviceId));
   }
 
   function clearFilters() {
@@ -485,44 +577,80 @@ function DiagramInner() {
         <div className="header-line">
           <div>
             <h2 style={{ marginTop: 0, marginBottom: 4 }}>Diagram</h2>
-            <div className="muted">Node = Service + Aim + Sub-aim. Edge = Decomposition relation.</div>
+            <div className="muted">
+              Node = Service + Aim + Sub-aim. Edge = Decomposition relation.
+            </div>
           </div>
           <div className="row">
-            <button className="btn secondary" onClick={clearFilters}>Clear filters</button>
-            <button className="btn secondary" onClick={clearSelection}>Clear selection</button>
-            <button className="btn" onClick={saveLayout}>Save layout</button>
+            <button className="btn secondary" onClick={clearFilters}>
+              Clear filters
+            </button>
+            <button className="btn secondary" onClick={clearSelection}>
+              Clear selection
+            </button>
+            <button className="btn" onClick={saveLayout}>
+              Save layout
+            </button>
           </div>
         </div>
 
         <div className="row" style={{ marginBottom: 12 }}>
-          <span className="pill" style={{ background: "#dbeafe", border: "1px solid #93c5fd" }}>CFS</span>
-          <span className="pill" style={{ background: "#dcfce7", border: "1px solid #86efac" }}>RFS</span>
-          <span className="pill" style={{ background: "#ffedd5", border: "1px solid #fdba74" }}>Resource</span>
+          <span
+            className="pill"
+            style={{ background: "#dbeafe", border: "1px solid #93c5fd" }}
+          >
+            CFS
+          </span>
+          <span
+            className="pill"
+            style={{ background: "#dcfce7", border: "1px solid #86efac" }}
+          >
+            RFS
+          </span>
+          <span
+            className="pill"
+            style={{ background: "#ffedd5", border: "1px solid #fdba74" }}
+          >
+            Resource
+          </span>
         </div>
 
         <div className="split">
           <div className="field">
             <label>Add service filter</label>
             <div className="row">
-              <select value={serviceToAdd} onChange={e => setServiceToAdd(e.target.value)}>
+              <select
+                value={serviceToAdd}
+                onChange={(e) => setServiceToAdd(e.target.value)}
+              >
                 <option value="">Select service</option>
-                {availableServicesToAdd.map(s => (
+                {availableServicesToAdd.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.type})
                   </option>
                 ))}
               </select>
-              <button className="btn secondary" type="button" onClick={addServiceFilter}>Add</button>
+              <button
+                className="btn secondary"
+                type="button"
+                onClick={addServiceFilter}
+              >
+                Add
+              </button>
             </div>
             {!!selectedServiceIds.length && (
               <div className="row" style={{ marginTop: 8 }}>
-                {selectedServiceIds.map(id => (
+                {selectedServiceIds.map((id) => (
                   <span key={id} className="pill">
                     {serviceLabel(id)}{" "}
                     <button
                       type="button"
                       onClick={() => removeServiceFilter(id)}
-                      style={{ border: "none", background: "transparent", cursor: "pointer" }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                      }}
                     >
                       ×
                     </button>
@@ -536,14 +664,14 @@ function DiagramInner() {
             <label>Focus parent service</label>
             <select
               value={focusParentServiceId}
-              onChange={e => {
+              onChange={(e) => {
                 setFocusParentServiceId(e.target.value);
                 setFocusAimId("");
                 setFocusSubAimId("");
               }}
             >
               <option value="">None</option>
-              {services.map(s => (
+              {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.type})
                 </option>
@@ -557,14 +685,14 @@ function DiagramInner() {
             <label>Focus aim</label>
             <select
               value={focusAimId}
-              onChange={e => {
+              onChange={(e) => {
                 setFocusAimId(e.target.value);
                 setFocusSubAimId("");
               }}
               disabled={!focusParentServiceId}
             >
               <option value="">None</option>
-              {availableFocusAims.map(a => (
+              {availableFocusAims.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name || a.code}
                 </option>
@@ -576,11 +704,11 @@ function DiagramInner() {
             <label>Focus sub-aim</label>
             <select
               value={focusSubAimId}
-              onChange={e => setFocusSubAimId(e.target.value)}
+              onChange={(e) => setFocusSubAimId(e.target.value)}
               disabled={!focusAimId}
             >
               <option value="">None</option>
-              {availableFocusSubAims.map(sa => (
+              {availableFocusSubAims.map((sa) => (
                 <option key={sa.id} value={sa.id}>
                   {sa.name || sa.code}
                 </option>
@@ -591,15 +719,18 @@ function DiagramInner() {
 
         <div className="field">
           <label>View mode</label>
-          <select value={viewMode} onChange={e => setViewMode(e.target.value)}>
+          <select value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
             <option value="FULL">Full graph</option>
-            <option value="FOCUS_ONLY">Show only focus node outgoing relations</option>
+            <option value="FOCUS_ONLY">
+              Show only focus node outgoing relations
+            </option>
             <option value="SUBTREE_ONLY">Show only selected subtree</option>
             <option value="EXPAND_FROM_NODE">Expand from selected node</option>
           </select>
           <div className="muted">
-            `FOCUS_ONLY` uses Focus Parent Service / Aim / Sub-aim. `SUBTREE_ONLY` and `EXPAND_FROM_NODE`
-            use clicked node first, then fall back to focus scenario if set.
+            `FOCUS_ONLY` uses Focus Parent Service / Aim / Sub-aim.
+            `SUBTREE_ONLY` and `EXPAND_FROM_NODE` use clicked node first, then
+            fall back to focus scenario if set.
           </div>
         </div>
 
@@ -640,9 +771,19 @@ function DiagramInner() {
               <div className="item-card">
                 <div>
                   <strong>DecomposeTo:</strong>{" "}
-                  {serviceLabel(selectedRelation.parent_service_id)} / {aimLabel(selectedRelation.parent_order_aim_id)} / {subAimLabel(selectedRelation.parent_order_aim_id, selectedRelation.parent_order_sub_aim_id)}
+                  {serviceLabel(selectedRelation.parent_service_id)} /{" "}
+                  {aimLabel(selectedRelation.parent_order_aim_id)} /{" "}
+                  {subAimLabel(
+                    selectedRelation.parent_order_aim_id,
+                    selectedRelation.parent_order_sub_aim_id
+                  )}
                   {" → "}
-                  {serviceLabel(selectedRelation.child_service_id)} / {aimLabel(selectedRelation.child_order_aim_id)} / {subAimLabel(selectedRelation.child_order_aim_id, selectedRelation.child_order_sub_aim_id)}
+                  {serviceLabel(selectedRelation.child_service_id)} /{" "}
+                  {aimLabel(selectedRelation.child_order_aim_id)} /{" "}
+                  {subAimLabel(
+                    selectedRelation.child_order_aim_id,
+                    selectedRelation.child_order_sub_aim_id
+                  )}
                 </div>
                 <div className="muted" style={{ marginTop: 6 }}>
                   Instantiation: {selectedRelation.instantiation_mode}
@@ -654,21 +795,32 @@ function DiagramInner() {
                 selectedPropagationRules.map((rule, idx) => (
                   <div className="item-card" key={idx}>
                     <div>
-                      <strong>{involvementLabel(rule.parent_attribute_involvement_id)}</strong>
+                      <strong>
+                        {involvementLabel(rule.parent_attribute_involvement_id)}
+                      </strong>
                       {" → "}
-                      <strong>{involvementLabel(rule.child_attribute_involvement_id)}</strong>
+                      <strong>
+                        {involvementLabel(rule.child_attribute_involvement_id)}
+                      </strong>
                     </div>
                     <div className="muted" style={{ marginTop: 6 }}>
-                      {rule.allowed_values.length ? rule.allowed_values.join(", ") : "All values"}
+                      {rule.allowed_values.length
+                        ? rule.allowed_values.join(", ")
+                        : "All values"}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="muted">No propagation rules for this relation.</div>
+                <div className="muted">
+                  No propagation rules for this relation.
+                </div>
               )}
             </>
           ) : (
-            <div className="muted">Click an edge in the diagram to see relation and propagation details.</div>
+            <div className="muted">
+              Click an edge in the diagram to see relation and propagation
+              details.
+            </div>
           )}
         </div>
 
@@ -677,27 +829,57 @@ function DiagramInner() {
           {selectedNode && selectedNodeService ? (
             <>
               <div className="item-card">
-                <div><strong>Service:</strong> {selectedNodeService.name} ({selectedNodeService.type})</div>
+                <div>
+                  <strong>Service:</strong> {selectedNodeService.name} (
+                  {selectedNodeService.type})
+                </div>
                 <div className="muted" style={{ marginTop: 6 }}>
-                  {aimLabel(selectedNode.aimId)} / {subAimLabel(selectedNode.aimId, selectedNode.subAimId)}
+                  {aimLabel(selectedNode.aimId)} /{" "}
+                  {subAimLabel(selectedNode.aimId, selectedNode.subAimId)}
                 </div>
                 <div className="row" style={{ marginTop: 10 }}>
-                  <button className="btn secondary" type="button" onClick={useNodeAsFocus}>Use as focus</button>
-                  <button className="btn secondary" type="button" onClick={showSubtreeFromNode}>Show subtree</button>
-                  <button className="btn secondary" type="button" onClick={expandFromNode}>Expand from here</button>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={useNodeAsFocus}
+                  >
+                    Use as focus
+                  </button>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={showSubtreeFromNode}
+                  >
+                    Show subtree
+                  </button>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={expandFromNode}
+                  >
+                    Expand from here
+                  </button>
                 </div>
               </div>
 
               <h4>Involvements</h4>
               {selectedNodeInvolvements.length ? (
-                selectedNodeInvolvements.map(inv => (
+                selectedNodeInvolvements.map((inv) => (
                   <div className="item-card" key={inv.id}>
-                    <div><strong>{attributeLabel(inv.attribute_id)}</strong></div>
-                    <div className="muted" style={{ marginTop: 6 }}>
-                      Allowed: {(inv.allowed_values || []).length ? inv.allowed_values.join(", ") : "free-form / all"}
+                    <div>
+                      <strong>{attributeLabel(inv.attribute_id)}</strong>
                     </div>
                     <div className="muted" style={{ marginTop: 6 }}>
-                      Default: {(inv.default_values || []).length ? inv.default_values.join(", ") : "—"}
+                      Allowed:{" "}
+                      {(inv.allowed_values || []).length
+                        ? inv.allowed_values.join(", ")
+                        : "free-form / all"}
+                    </div>
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      Default:{" "}
+                      {(inv.default_values || []).length
+                        ? inv.default_values.join(", ")
+                        : "—"}
                     </div>
                   </div>
                 ))
@@ -706,7 +888,9 @@ function DiagramInner() {
               )}
             </>
           ) : (
-            <div className="muted">Click a node in the diagram to see service and involvement details.</div>
+            <div className="muted">
+              Click a node in the diagram to see service and involvement details.
+            </div>
           )}
         </div>
       </div>
