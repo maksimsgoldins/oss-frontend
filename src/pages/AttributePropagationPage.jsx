@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 
 export default function AttributePropagationPage() {
@@ -13,6 +13,7 @@ export default function AttributePropagationPage() {
   const [selectedParentAi, setSelectedParentAi] = useState("");
   const [selectedChildAi, setSelectedChildAi] = useState("");
   const [selectedValues, setSelectedValues] = useState([]);
+  const [filterMode, setFilterMode] = useState("ALL");
   const [error, setError] = useState("");
 
   async function load() {
@@ -41,9 +42,11 @@ export default function AttributePropagationPage() {
   }, []);
 
   const relation = relations.find(r => r.id === selectedRelationId);
+
   const parentList = relation
     ? involvements.filter(ai => ai.service_id === relation.parent_service_id)
     : [];
+
   const childList = relation
     ? involvements.filter(ai => ai.service_id === relation.child_service_id)
     : [];
@@ -54,15 +57,21 @@ export default function AttributePropagationPage() {
   const parentAttribute = attributes.find(a => a.id === parentInvolvement?.attribute_id);
   const childAttribute = attributes.find(a => a.id === childInvolvement?.attribute_id);
 
-  const parentIsFreeForm = !!parentAttribute && (!parentAttribute.possible_values || parentAttribute.possible_values.length === 0);
-  const childIsFreeForm = !!childAttribute && (!childAttribute.possible_values || childAttribute.possible_values.length === 0);
+  const parentType = parentAttribute?.value_type || "";
+  const childType = childAttribute?.value_type || "";
+
+  const parentValues = parentInvolvement?.allowed_values || [];
+  const childValues = childInvolvement?.allowed_values || [];
+
+  const parentRestricted = parentValues.length > 0;
+  const childRestricted = childValues.length > 0;
 
   const intersection =
-    parentInvolvement && childInvolvement && !parentIsFreeForm && !childIsFreeForm
-      ? (parentInvolvement.allowed_values || []).filter(v =>
-          (childInvolvement.allowed_values || []).includes(v)
-        )
+    parentRestricted && childRestricted
+      ? parentValues.filter(v => childValues.includes(v))
       : [];
+
+  const currentRelationProps = propagations.filter(p => p.relation_id === selectedRelationId);
 
   function serviceLabel(serviceId) {
     const s = services.find(x => x.id === serviceId);
@@ -96,9 +105,9 @@ export default function AttributePropagationPage() {
 
   function involvementValuesLabel(ai) {
     const attr = attributes.find(a => a.id === ai.attribute_id);
-    const isFreeForm = !attr?.possible_values || attr.possible_values.length === 0;
-    if (isFreeForm) return "free-form";
-    return (ai.allowed_values || []).join(", ") || "—";
+    const possible = attr?.possible_values || [];
+    if (!possible.length) return "free-form";
+    return (ai.allowed_values || []).join(", ") || "all configured values";
   }
 
   function toggleValue(v) {
@@ -107,32 +116,81 @@ export default function AttributePropagationPage() {
     );
   }
 
+  const warnings = useMemo(() => {
+    const out = [];
+    if (!parentInvolvement || !childInvolvement) return out;
+
+    if (parentAttribute && childAttribute) {
+      if ((parentAttribute.name || parentAttribute.code) !== (childAttribute.name || childAttribute.code)) {
+        out.push("Attribute names differ.");
+      }
+      if (parentType && childType && parentType !== childType) {
+        out.push("Source and target attribute types differ.");
+      }
+      if (parentType === "list" && childType !== "list") {
+        out.push("Source is multi-value, target is not list.");
+      }
+      if (parentType !== "list" && childType === "list") {
+        out.push("Target is multi-value, source is atomic.");
+      }
+    }
+
+    if (!parentRestricted && childRestricted) {
+      out.push("Source is free-form, target is value-restricted.");
+    }
+    if (parentRestricted && !childRestricted) {
+      out.push("Source is value-restricted, target is free-form.");
+    }
+    if (parentRestricted && childRestricted && intersection.length === 0) {
+      out.push("No intersecting values between source and target.");
+    }
+    if ((parentRestricted || childRestricted) && filterMode === "SELECTED" && selectedValues.length === 0) {
+      out.push("Value filtering mode is selected, but no values are chosen.");
+    }
+
+    return out;
+  }, [
+    parentInvolvement,
+    childInvolvement,
+    parentAttribute,
+    childAttribute,
+    parentType,
+    childType,
+    parentRestricted,
+    childRestricted,
+    intersection,
+    filterMode,
+    selectedValues,
+  ]);
+
   async function save() {
     try {
       setError("");
+
+      if (!selectedRelationId || !selectedParentAi || !selectedChildAi) {
+        setError("Select relation, parent attribute, and child attribute.");
+        return;
+      }
+
       await api.createAttributePropagation({
         relation_id: selectedRelationId,
         parent_attribute_involvement_id: selectedParentAi,
         child_attribute_involvement_id: selectedChildAi,
-        allowed_values: selectedValues
+        allowed_values: filterMode === "SELECTED" ? selectedValues : []
       });
+
       await load();
     } catch (err) {
       setError(err?.message || JSON.stringify(err));
     }
   }
 
-  const currentRelationProps = propagations.filter(
-    p => p.relation_id === selectedRelationId
-  );
-
   return (
     <>
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Attribute Propagation</h2>
         <div className="muted">
-          Choose a relation, map parent involvement to child involvement, then
-          select intersecting values.
+          Choose a relation, map any parent attribute to any child attribute, and optionally configure value filtering.
         </div>
       </div>
 
@@ -146,6 +204,7 @@ export default function AttributePropagationPage() {
               setSelectedParentAi("");
               setSelectedChildAi("");
               setSelectedValues([]);
+              setFilterMode("ALL");
             }}
           >
             <option value="">Select relation</option>
@@ -198,33 +257,56 @@ export default function AttributePropagationPage() {
         </div>
 
         <div className="panel" style={{ boxShadow: "none", padding: 0 }}>
-          <h3>Values to propagate</h3>
+          <h3>Propagation mode</h3>
 
-          {parentInvolvement && childInvolvement ? (
-            parentIsFreeForm || childIsFreeForm ? (
-              <div className="muted">
-                Free-form propagation is not supported in this screen yet.
-              </div>
-            ) : intersection.length ? (
-              intersection.map(v => (
-                <label key={v} style={{ display: "block", marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedValues.includes(v)}
-                    onChange={() => toggleValue(v)}
-                  />{" "}
-                  {v}
-                </label>
-              ))
+          <label style={{ display: "block", marginBottom: 8 }}>
+            <input
+              type="radio"
+              name="filterMode"
+              checked={filterMode === "ALL"}
+              onChange={() => {
+                setFilterMode("ALL");
+                setSelectedValues([]);
+              }}
+            />{" "}
+            Propagate all values
+          </label>
+
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <input
+              type="radio"
+              name="filterMode"
+              checked={filterMode === "SELECTED"}
+              onChange={() => setFilterMode("SELECTED")}
+              disabled={!parentRestricted && !childRestricted}
+            />{" "}
+            Propagate selected values only
+          </label>
+
+          {filterMode === "SELECTED" ? (
+            parentRestricted && childRestricted ? (
+              intersection.length ? (
+                intersection.map(v => (
+                  <label key={v} style={{ display: "block", marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedValues.includes(v)}
+                      onChange={() => toggleValue(v)}
+                    />{" "}
+                    {v}
+                  </label>
+                ))
+              ) : (
+                <div className="muted">No intersecting values between source and target.</div>
+              )
             ) : (
               <div className="muted">
-                No intersecting values between parent and child involvement.
+                Selected-values filtering is meaningful only when both sides have restricted values.
               </div>
             )
           ) : (
             <div className="muted">
-              Select parent and child involvement. Only intersecting values are
-              allowed.
+              Value-level filtering is not configured. OM should copy the source value into the target attribute.
             </div>
           )}
 
@@ -232,48 +314,46 @@ export default function AttributePropagationPage() {
             <button
               className="btn"
               onClick={save}
-              disabled={
-                !selectedRelationId ||
-                !selectedParentAi ||
-                !selectedChildAi ||
-                parentIsFreeForm ||
-                childIsFreeForm
-              }
+              disabled={!selectedRelationId || !selectedParentAi || !selectedChildAi}
             >
               Save propagation
             </button>
           </div>
         </div>
 
+        {!!warnings.length && (
+          <div className="panel" style={{ boxShadow: "none", padding: 0 }}>
+            <h3>Warnings</h3>
+            {warnings.map((w, idx) => (
+              <div key={idx} className="muted" style={{ marginBottom: 6 }}>
+                • {w}
+              </div>
+            ))}
+          </div>
+        )}
+
         {error && <div className="error">{error}</div>}
       </div>
 
       <div className="panel">
         <h3 style={{ marginTop: 0 }}>Current propagation rules for selected relation</h3>
-        {currentRelationProps.map((p, idx) => (
-          <div className="item-card" key={idx}>
-            <div>
-              <strong>
-                {involvementLabel(
-                  involvements.find(x => x.id === p.parent_attribute_involvement_id) || {
-                    attribute_id: p.parent_attribute_involvement_id
-                  }
-                )}
-              </strong>
-              {" → "}
-              <strong>
-                {involvementLabel(
-                  involvements.find(x => x.id === p.child_attribute_involvement_id) || {
-                    attribute_id: p.child_attribute_involvement_id
-                  }
-                )}
-              </strong>
+        {currentRelationProps.map((p, idx) => {
+          const pAi = involvements.find(x => x.id === p.parent_attribute_involvement_id);
+          const cAi = involvements.find(x => x.id === p.child_attribute_involvement_id);
+
+          return (
+            <div className="item-card" key={idx}>
+              <div>
+                <strong>{pAi ? involvementLabel(pAi) : p.parent_attribute_involvement_id}</strong>
+                {" → "}
+                <strong>{cAi ? involvementLabel(cAi) : p.child_attribute_involvement_id}</strong>
+              </div>
+              <div className="muted" style={{ marginTop: 6 }}>
+                {p.allowed_values.length ? p.allowed_values.join(", ") : "All values"}
+              </div>
             </div>
-            <div className="muted" style={{ marginTop: 6 }}>
-              {p.allowed_values.join(", ") || "—"}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!currentRelationProps.length && <div className="muted">No propagation rules.</div>}
       </div>
     </>
