@@ -13,11 +13,12 @@ export default function Layout({ children }) {
       ["/attribute-propagation", "Attribute Propagation"],
     ]},
     { title: "Orchestrator", items: [
-      ["/orchestrator/process-elements", "Process Elements"],
-      ["/orchestrator/process-flows", "Process Flows"],
       ["/orchestrator/task-specs", "Task Specs"],
       ["/orchestrator/process-specs", "Process Specs"],
+      ["/orchestrator/process-elements", "Process Elements"],
+      ["/orchestrator/process-flows", "Process Flows"],
       ["/orchestrator/process-diagram", "Process Diagram"],
+      ["/orchestrator/inter-process-dependencies", "Inter-Process Dependencies"],
     ]},
     { title: "General", items: [
       ["/order-aims", "Order Aims"],

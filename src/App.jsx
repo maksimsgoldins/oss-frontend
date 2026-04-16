@@ -14,6 +14,7 @@ import ProcessSpecsPage from "./pages/ProcessSpecsPage";
 import ProcessElementsPage from "./pages/ProcessElementsPage";
 import ProcessFlowsPage from "./pages/ProcessFlowsPage";
 import ProcessDiagramPage from "./pages/ProcessDiagramPage";
+import InterProcessDependenciesPage from "./pages/InterProcessDependenciesPage";
 
 export default function App() {
   return (
@@ -28,10 +29,11 @@ export default function App() {
         <Route path="/attribute-propagation" element={<AttributePropagationPage />} />
         <Route path="/diagram" element={<DiagramPage />} />
         <Route path="/orchestrator/task-specs" element={<TaskSpecsPage />} />
-        <Route path="/orchestrator/process-specs" element={<ProcessSpecsPage />} />  
+        <Route path="/orchestrator/process-specs" element={<ProcessSpecsPage />} />
         <Route path="/orchestrator/process-elements" element={<ProcessElementsPage />} />
-        <Route path="/orchestrator/process-flows" element={<ProcessFlowsPage />} />  
+        <Route path="/orchestrator/process-flows" element={<ProcessFlowsPage />} />
         <Route path="/orchestrator/process-diagram" element={<ProcessDiagramPage />} />
+        <Route path="/orchestrator/inter-process-dependencies" element={<InterProcessDependenciesPage />} />
       </Routes>
     </Layout>
   );
