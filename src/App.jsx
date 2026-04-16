@@ -9,6 +9,8 @@ import InvolvementsPage from "./pages/InvolvementsPage";
 import DecompositionPage from "./pages/DecompositionPage";
 import AttributePropagationPage from "./pages/AttributePropagationPage";
 import DiagramPage from "./pages/DiagramPage";
+import TaskSpecsPage from "./pages/TaskSpecsPage";
+import ProcessSpecsPage from "./pages/ProcessSpecsPage";
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
         <Route path="/decomposition" element={<DecompositionPage />} />
         <Route path="/attribute-propagation" element={<AttributePropagationPage />} />
         <Route path="/diagram" element={<DiagramPage />} />
+        <Route path="/orchestrator/task-specs" element={<TaskSpecsPage />} />
+        <Route path="/orchestrator/process-specs" element={<ProcessSpecsPage />} />  
       </Routes>
     </Layout>
   );
