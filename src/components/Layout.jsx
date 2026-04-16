@@ -12,6 +12,10 @@ export default function Layout({ children }) {
       ["/involvements", "Manage Involvements"],
       ["/attribute-propagation", "Attribute Propagation"],
     ]},
+    { title: "Orchestrator", items: [
+      ["/orchestrator/task-specs", "Task Specs"],
+      ["/orchestrator/process-specs", "Process Specs"],
+    ]},
     { title: "General", items: [
       ["/order-aims", "Order Aims"],
       ["/", "Dashboard"],
