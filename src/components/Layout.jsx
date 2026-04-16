@@ -13,6 +13,8 @@ export default function Layout({ children }) {
       ["/attribute-propagation", "Attribute Propagation"],
     ]},
     { title: "Orchestrator", items: [
+      ["/orchestrator/process-elements", "Process Elements"],
+      ["/orchestrator/process-flows", "Process Flows"],
       ["/orchestrator/task-specs", "Task Specs"],
       ["/orchestrator/process-specs", "Process Specs"],
     ]},
