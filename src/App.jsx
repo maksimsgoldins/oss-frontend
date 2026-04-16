@@ -15,6 +15,7 @@ import ProcessElementsPage from "./pages/ProcessElementsPage";
 import ProcessFlowsPage from "./pages/ProcessFlowsPage";
 import ProcessDiagramPage from "./pages/ProcessDiagramPage";
 import InterProcessDependenciesPage from "./pages/InterProcessDependenciesPage";
+import CrossProcessDiagramPage from "./pages/CrossProcessDiagramPage";
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/orchestrator/process-flows" element={<ProcessFlowsPage />} />
         <Route path="/orchestrator/process-diagram" element={<ProcessDiagramPage />} />
         <Route path="/orchestrator/inter-process-dependencies" element={<InterProcessDependenciesPage />} />
+        <Route path="/orchestrator/cross-process-diagram" element={<CrossProcessDiagramPage />} />
       </Routes>
     </Layout>
   );

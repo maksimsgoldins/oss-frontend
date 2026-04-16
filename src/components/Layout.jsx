@@ -19,6 +19,7 @@ export default function Layout({ children }) {
       ["/orchestrator/process-flows", "Process Flows"],
       ["/orchestrator/process-diagram", "Process Diagram"],
       ["/orchestrator/inter-process-dependencies", "Inter-Process Dependencies"],
+      ["/orchestrator/cross-process-diagram", "Cross-Process Diagram"],
     ]},
     { title: "General", items: [
       ["/order-aims", "Order Aims"],
