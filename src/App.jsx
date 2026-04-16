@@ -13,6 +13,7 @@ import TaskSpecsPage from "./pages/TaskSpecsPage";
 import ProcessSpecsPage from "./pages/ProcessSpecsPage";
 import ProcessElementsPage from "./pages/ProcessElementsPage";
 import ProcessFlowsPage from "./pages/ProcessFlowsPage";
+import ProcessDiagramPage from "./pages/ProcessDiagramPage";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/orchestrator/process-specs" element={<ProcessSpecsPage />} />  
         <Route path="/orchestrator/process-elements" element={<ProcessElementsPage />} />
         <Route path="/orchestrator/process-flows" element={<ProcessFlowsPage />} />  
+        <Route path="/orchestrator/process-diagram" element={<ProcessDiagramPage />} />
       </Routes>
     </Layout>
   );
